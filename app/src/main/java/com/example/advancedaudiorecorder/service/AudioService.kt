@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.os.Binder
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
@@ -13,6 +14,8 @@ import androidx.core.app.NotificationCompat
 import com.example.advancedaudiorecorder.MainActivity
 import com.example.advancedaudiorecorder.R
 import com.example.advancedaudiorecorder.audio.Metronome
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 class AudioService : Service() {
 
@@ -28,12 +31,19 @@ class AudioService : Service() {
         const val ACTION_DECREASE_BPM = "com.example.ACTION_DECREASE_BPM"
     }
 
+    private val _isRecording = MutableStateFlow(false)
+    val isRecording: StateFlow<Boolean> = _isRecording
+
     private lateinit var metronome: Metronome
-    private var isMetronomeRunning = false
 
     // Пример уведомления для фонового сервиса
     private val channelId = "audio_service_channel"
     private val notificationId = 1
+
+    private val binder = LocalBinder()
+    inner class LocalBinder : Binder() {
+        fun getService(): AudioService = this@AudioService
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -54,20 +64,21 @@ class AudioService : Service() {
                 stopSelf()
             }
             ACTION_TOGGLE_METRONOME -> {
-                if (isMetronomeRunning) {
+                if (metronome.isRunning) {
                     metronome.stop()
                 } else {
                     metronome.start()
                 }
-                isMetronomeRunning = !isMetronomeRunning
             }
             ACTION_INCREASE_BPM -> {
-                metronome.setBpm(metronome.getBpm() + 5)
+                metronome.setBpm(metronome.getBpm + 5)
             }
             ACTION_DECREASE_BPM -> {
-                metronome.setBpm(metronome.getBpm() - 5)
+                metronome.setBpm(metronome.getBpm - 5)
             }
         }
+
+        _isRecording.value = metronome.isRunning
 
         Log.d("checkData", "AudioService: onStartCommand")
 
@@ -89,12 +100,12 @@ class AudioService : Service() {
         val toggleMetronomePendingIntent = PendingIntent.getService(this, 1, toggleMetronomeIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE)
 
         val icon : Int
-        val (title, text, buttonTitle) = if (isMetronomeRunning) {
+        val (title, text, buttonTitle) = if (metronome.isRunning) {
             icon = R.drawable.ic_stop
             Triple("Запись звука", "Идет запись звука...", "Остановить запись")
         } else {
             icon = R.drawable.ic_play
-            Triple("Запись звука отключена", "Вы можете начать запись новой звуковой дорожки", "Начать запись")
+            Triple("Запись звука отключена", "Вы можете начать новую запись", "Начать запись")
         }
         // Создаем уведомление
         val notificationIntent = Intent(this, MainActivity::class.java)
@@ -121,7 +132,7 @@ class AudioService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? {
         Log.d("checkData", "AudioService: onBind")
-        return null
+        return binder
     }
 
     override fun onDestroy() {
@@ -143,5 +154,9 @@ class AudioService : Service() {
             val manager = getSystemService(NotificationManager::class.java)
             manager?.createNotificationChannel(channel)
         }
+    }
+
+    fun isMetronomeRunning(): Boolean {
+        return metronome.isRunning
     }
 }

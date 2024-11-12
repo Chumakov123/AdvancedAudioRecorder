@@ -5,16 +5,21 @@ import android.media.ToneGenerator
 import kotlinx.coroutines.*
 
 class Metronome {
-    fun getBpm() : Int {return bpm}
     private var bpm : Int = 120
     private var metronomeJob: Job? = null
     private val toneGenerator = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
     private var interval = calculateInterval(bpm)
 
+    val getBpm : Int
+        get() = bpm
+
+    val isRunning : Boolean
+        get() = metronomeJob?.isActive == true
+
     // Запуск метронома с учетом времени, выбранного пользователем
     fun start(trackStartTimeMillis: Long = 0) {
         // Если метроном уже запущен, ничего не делаем
-        if (metronomeJob?.isActive == true) return
+        if (isRunning) return
 
         // Вычисление времени до следующего такта на основе времени начала трека и BPM
         val firstTickDelay = calculateFirstTickDelay(trackStartTimeMillis)
