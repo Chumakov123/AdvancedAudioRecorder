@@ -88,7 +88,7 @@ fun Greeting(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(text = "Продвинутый рекордер")
+        Text(text = "Advanced Audio Recorder")
 
         Spacer(modifier = Modifier.height(16.dp))
 

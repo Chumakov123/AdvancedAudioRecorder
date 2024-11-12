@@ -70,15 +70,6 @@ class AudioService : Service() {
         }
 
         Log.d("checkData", "AudioService: onStartCommand")
-        // Подготовка и запуск уведомления
-        val input = intent.getStringExtra("intentExtra")
-        val notificationIntent = Intent(this, MainActivity::class.java)
-        val pendingIntent = PendingIntent.getActivity(
-            this,
-            0,
-            notificationIntent,
-            PendingIntent.FLAG_MUTABLE
-        )
 
         startForeground(notificationId, createNotification())
         return START_NOT_STICKY
@@ -106,11 +97,21 @@ class AudioService : Service() {
             Triple("Запись звука отключена", "Вы можете начать запись новой звуковой дорожки", "Начать запись")
         }
         // Создаем уведомление
+        val notificationIntent = Intent(this, MainActivity::class.java)
+        notificationIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        notificationIntent.addCategory(Intent.CATEGORY_LAUNCHER)
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            0,
+            notificationIntent,
+            PendingIntent.FLAG_MUTABLE
+        )
+
         return NotificationCompat.Builder(this, channelId)
             .setContentTitle(title)
             .setContentText(text)
             .setSmallIcon(icon)
-            .setContentIntent(PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE))
+            .setContentIntent(pendingIntent)
             .addAction(R.drawable.ic_music, buttonTitle, toggleMetronomePendingIntent) // Кнопка для управления метрономом
             .addAction(R.drawable.ic_close, "Выход", stopPendingIntent) // Кнопка для остановки сервиса
             .setPriority(NotificationCompat.PRIORITY_HIGH)
