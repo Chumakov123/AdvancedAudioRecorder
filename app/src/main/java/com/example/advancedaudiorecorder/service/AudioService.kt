@@ -53,6 +53,7 @@ class AudioService : Service() {
     }
     override fun onStartCommand(intent: Intent, flags: Int, startId: Int): Int {
         val action = intent.action
+        var isStopped = false
         when (action) {
             ACTION_START_METRONOME -> metronome.start()
             ACTION_STOP_METRONOME -> metronome.stop()
@@ -61,7 +62,9 @@ class AudioService : Service() {
                 metronome.setBpm(bpm)
             }
             ACTION_STOP_SERVICE -> {
-                stopSelf()
+                isStopped = true
+                metronome.stop()
+                stopForeground(STOP_FOREGROUND_REMOVE)
             }
             ACTION_TOGGLE_METRONOME -> {
                 if (metronome.isRunning) {
@@ -82,7 +85,8 @@ class AudioService : Service() {
 
         Log.d("checkData", "AudioService: onStartCommand")
 
-        startForeground(notificationId, createNotification())
+        if (!isStopped)
+            startForeground(notificationId, createNotification())
         return START_NOT_STICKY
     }
 
