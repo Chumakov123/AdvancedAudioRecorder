@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -30,9 +29,6 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.Divider
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -52,6 +48,7 @@ import androidx.lifecycle.lifecycleScope
 import com.example.advancedaudiorecorder.service.AudioService
 import com.example.advancedaudiorecorder.ui.theme.AdvancedAudioRecorderTheme
 import kotlinx.coroutines.launch
+import androidx.compose.ui.tooling.preview.Preview
 
 class MainActivity : ComponentActivity() {
     private lateinit var audioService: AudioService
@@ -123,7 +120,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setFullscreen()
+        //setFullscreen()
 
         enableEdgeToEdge()
         setContent {
@@ -139,6 +136,12 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+    }
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            setFullscreen()
+        }
     }
     private fun startMetronome() {
         sendCommandToService(AudioService.ACTION_START_METRONOME)
@@ -234,7 +237,7 @@ fun MainScreen(
                 .fillMaxWidth()
                 .height(60.dp)
                 .background(MaterialTheme.colorScheme.secondary)
-                .padding(8.dp),
+                .padding(0.dp),
             contentAlignment = Alignment.Center
         ) {
             Row(
@@ -247,14 +250,26 @@ fun MainScreen(
                     } else {
                         onStopMetronome()
                     }
-                }) {
+                },
+                    modifier = Modifier.size(60.dp)) {
                     Icon(
-                        painter = painterResource(id = if (isRecording) R.drawable.ic_record else R.drawable.ic_record),
-                        contentDescription = "Toggle Metronome",
-                        tint = Color.Red
+                        painter = painterResource(id = if (isRecording) R.drawable.ic_stop_recording else R.drawable.ic_record),
+                        contentDescription = if (isRecording) "Остановить запись" else "Начать запись",
+                        modifier = Modifier.size(60.dp),
+                        tint = Color.Unspecified
                     )
                 }
             }
         }
     }
+}
+@Preview(showBackground = true)
+@Composable
+fun MainScreenPreview() {
+    MainScreen(
+        modifier = Modifier,
+        onStartMetronome = { /* Пустой обработчик для превью */ },
+        onStopMetronome = { /* Пустой обработчик для превью */ },
+        isRecording = false // Или true для тестирования состояния записи
+    )
 }

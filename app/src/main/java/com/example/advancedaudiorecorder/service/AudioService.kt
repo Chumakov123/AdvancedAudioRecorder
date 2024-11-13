@@ -159,8 +159,4 @@ class AudioService : Service() {
             manager?.createNotificationChannel(channel)
         }
     }
-
-    fun isMetronomeRunning(): Boolean {
-        return metronome.isRunning
-    }
 }
