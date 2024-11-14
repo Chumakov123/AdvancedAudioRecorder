@@ -11,7 +11,7 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import com.example.advancedaudiorecorder.MainActivity
+import com.example.advancedaudiorecorder.presentation.main.MainActivity
 import com.example.advancedaudiorecorder.R
 import com.example.advancedaudiorecorder.audio.Metronome
 import kotlinx.coroutines.flow.MutableStateFlow
