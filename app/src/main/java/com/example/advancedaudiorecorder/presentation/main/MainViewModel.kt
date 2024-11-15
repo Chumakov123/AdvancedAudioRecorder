@@ -9,21 +9,28 @@ import com.example.advancedaudiorecorder.service.AudioService
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
-    // Состояние записи
     val isRecording = mutableStateOf(false)
+    val isPlaying = mutableStateOf(false)
+    val isMetronomeEnabled = mutableStateOf(false)
 
-    // Метод для обновления состояния записи
     fun updateRecordingState(isRecordingNow: Boolean) {
         isRecording.value = isRecordingNow
     }
-
-    // Методы для управления метрономом
-    fun startMetronome() {
-        sendCommandToService(AudioService.ACTION_START_METRONOME)
+    fun updatePlayingState(isPlayingNow: Boolean) {
+        isPlaying.value = isPlayingNow
+    }
+    fun updateMetronomeState(isMetronomeEnabledNow: Boolean) {
+        isMetronomeEnabled.value = isMetronomeEnabledNow
     }
 
-    fun stopMetronome() {
-        sendCommandToService(AudioService.ACTION_STOP_METRONOME)
+    fun switchRecording() {
+        sendCommandToService(AudioService.ACTION_SWITCH_RECORDING)
+    }
+    fun switchPlaying() {
+        sendCommandToService(AudioService.ACTION_SWITCH_PLAYING)
+    }
+    fun switchMetronome() {
+        sendCommandToService(AudioService.ACTION_SWITCH_METRONOME)
     }
 
     private fun sendCommandToService(action: String) {

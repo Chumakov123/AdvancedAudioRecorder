@@ -1,22 +1,44 @@
 package com.example.advancedaudiorecorder.audio
 
+import android.content.Context
+import android.media.AudioAttributes
 import android.media.AudioManager
+import android.media.SoundPool
 import android.media.ToneGenerator
+import com.example.advancedaudiorecorder.R
 import kotlinx.coroutines.*
 
-class Metronome {
-    private var bpm : Int = 120
+class Metronome(private val context: Context) {
+    private var bpm: Int = 150
     private var metronomeJob: Job? = null
-    private val toneGenerator = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
     private var interval = calculateInterval(bpm)
 
-    val getBpm : Int
+    private var soundPool: SoundPool
+    private var kickSoundId: Int = 0
+
+    val getBpm: Int
         get() = bpm
 
-    val isRunning : Boolean
+    val isRunning: Boolean
         get() = metronomeJob?.isActive == true
 
-    // Запуск метронома с учетом времени, выбранного пользователем
+    // Инициализация SoundPool и загрузка кастомного звука
+    init {
+        val audioAttributes = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_MEDIA)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
+
+        soundPool = SoundPool.Builder()
+            .setMaxStreams(1)
+            .setAudioAttributes(audioAttributes)
+            .build()
+
+        // Загрузка звука бас-бочки
+        kickSoundId = soundPool.load(context, R.raw.kick, 1)
+    }
+
+    // Запуск метронома с кастомным звуком
     fun start(trackStartTimeMillis: Long = 0) {
         // Если метроном уже запущен, ничего не делаем
         if (isRunning) return
@@ -30,7 +52,7 @@ class Metronome {
 
             // Воспроизведение тиков
             while (isActive) {
-                toneGenerator.startTone(ToneGenerator.TONE_CDMA_PIP, 150)
+                soundPool.play(kickSoundId, 1f, 1f, 1, 0, 1f) // Воспроизведение бас-бочки
                 delay(interval)
             }
         }
@@ -67,6 +89,6 @@ class Metronome {
 
     // Очистка ресурсов
     fun release() {
-        toneGenerator.release()
+        soundPool.release()
     }
 }

@@ -22,9 +22,12 @@ import com.example.advancedaudiorecorder.R
 
 @Composable
 fun BottomBar(
-    onStartMetronome: () -> Unit,
-    onStopMetronome: () -> Unit,
-    isRecording: Boolean
+    onSwitchRecording: () -> Unit,
+    onSwitchPlaying: () -> Unit,
+    onSwitchMetronome: () -> Unit,
+    isRecording: Boolean,
+    isPlaying: Boolean,
+    isMetronomeEnabled: Boolean
 ) {
     Box(
         modifier = Modifier
@@ -64,13 +67,7 @@ fun BottomBar(
                     tint = Color.Unspecified
                 )
             }
-            IconButton(onClick = {
-                if (!isRecording) {
-                    onStartMetronome()
-                } else {
-                    onStopMetronome()
-                }
-            },
+            IconButton(onClick = { onSwitchRecording() },
                 modifier = Modifier.size(60.dp)) {
                 Icon(
                     painter = painterResource(id = if (isRecording) R.drawable.ic_stop_recording else R.drawable.ic_record),
@@ -81,11 +78,11 @@ fun BottomBar(
             }
             // Кнопка "Play" справа
             IconButton(
-                onClick = { /* TODO Действие для кнопки Play */ },
+                onClick = { onSwitchPlaying() },
                 modifier = Modifier.size(50.dp)
             ) {
                 Icon(
-                    painter = painterResource(id = R.drawable.ic_play_audio),
+                    painter = painterResource(id = if (isPlaying) R.drawable.ic_pause_audio else R.drawable.ic_play_audio),
                     contentDescription = "Проиграть",
                     modifier = Modifier.size(50.dp),
                     tint = Color.Unspecified
@@ -94,12 +91,12 @@ fun BottomBar(
         }
         // Кнопка "Метроном" в правом углу
         IconButton(
-            onClick = { /* TODO Действие для метронома */ },
+            onClick = { onSwitchMetronome() },
             modifier = Modifier
                 .align(Alignment.CenterEnd)
                 .padding(end = 8.dp)
                 .size(45.dp)
-                .background(if (isRecording) Color(0xFFBB86FC) else Color.Transparent, shape = CircleShape) // Подсветка, если включен
+                .background(if (isMetronomeEnabled) Color(0xFFBB86FC) else Color.Transparent, shape = CircleShape) // Подсветка, если включен
         ) {
             Icon(
                 painter = painterResource(id = R.drawable.ic_metronome),

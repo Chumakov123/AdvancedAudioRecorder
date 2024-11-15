@@ -9,6 +9,9 @@ import android.os.IBinder
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.ActivityResult
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -24,8 +27,12 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.advancedaudiorecorder.presentation.screens.MainScreen
 import com.example.advancedaudiorecorder.utils.UiUtils
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
+import java.security.Permissions
 
 class MainActivity : ComponentActivity() {
+    private lateinit var permissionLauncher: ActivityResultLauncher<String>
 
     private val mainViewModel: MainViewModel by viewModels()
     private var audioService: AudioService? = null
@@ -37,10 +44,21 @@ class MainActivity : ComponentActivity() {
             audioService = localBinder.getService()
             bound = true
 
+            audioService?.permissionRequest?.observe(this@MainActivity) { permission ->
+                requestPermission(permission)
+            }
             // Подписываемся на изменения состояния записи из сервиса
             lifecycleScope.launch {
-                audioService?.isRecording?.collect { isRunning ->
-                    mainViewModel.updateRecordingState(isRunning)
+                combine(
+                    audioService?.isRecording ?: flowOf(false),
+                    audioService?.isPlaying ?: flowOf(false),
+                    audioService?.isMetronomeEnabled ?: flowOf(false)
+                ) { isRecording, isPlaying, isMetronomeEnabled ->
+                    Triple(isRecording, isPlaying, isMetronomeEnabled)
+                }.collect { (isRecording, isPlaying, isMetronomeEnabled) ->
+                    mainViewModel.updateRecordingState(isRecording)
+                    mainViewModel.updatePlayingState(isPlaying)
+                    mainViewModel.updateMetronomeState(isMetronomeEnabled)
                 }
             }
         }
@@ -50,7 +68,6 @@ class MainActivity : ComponentActivity() {
             audioService = null
         }
     }
-
     override fun onStart() {
         super.onStart()
         // Привязываем сервис
@@ -76,6 +93,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        registerPermissionListener()
         enableEdgeToEdge()
         setContent {
             AdvancedAudioRecorderTheme {
@@ -86,13 +104,26 @@ class MainActivity : ComponentActivity() {
                 ) { innerPadding ->
                     MainScreen(
                         modifier = Modifier.padding(innerPadding),
-                        onStartMetronome = { mainViewModel.startMetronome() },
-                        onStopMetronome = { mainViewModel.stopMetronome() },
-                        isRecording = mainViewModel.isRecording.value
+                        onSwitchRecording = { mainViewModel.switchRecording() },
+                        onSwitchPlaying = { mainViewModel.switchPlaying() },
+                        onSwitchMetronome = { mainViewModel.switchMetronome() },
+                        isRecording = mainViewModel.isRecording.value,
+                        isPlaying = mainViewModel.isPlaying.value,
+                        isMetronomeEnabled = mainViewModel.isMetronomeEnabled.value
                     )
                 }
             }
         }
+    }
+    fun requestPermission(permission : String) {
+        permissionLauncher.launch(permission)
+    }
+    private fun registerPermissionListener() {
+        permissionLauncher = registerForActivityResult(
+            ActivityResultContracts.RequestPermission()) {
+
+        }
+
     }
 }
 
@@ -101,8 +132,11 @@ class MainActivity : ComponentActivity() {
 fun MainScreenPreview() {
     MainScreen(
         modifier = Modifier,
-        onStartMetronome = { /* Пустой обработчик для превью */ },
-        onStopMetronome = { /* Пустой обработчик для превью */ },
-        isRecording = false // Или true для тестирования состояния записи
+        onSwitchRecording = {},
+        onSwitchPlaying = {},
+        onSwitchMetronome =  {},
+        isRecording = false,
+        isPlaying = false,
+        isMetronomeEnabled = false
     )
 }
