@@ -50,7 +50,6 @@ class AudioService : Service() {
     private val _isMetronomeEnabled = MutableStateFlow(true)
     val isMetronomeEnabled: StateFlow<Boolean> = _isMetronomeEnabled
 
-    private lateinit var metronome: Metronome
     private lateinit var audioEngine: AudioEngine
 
     // Пример уведомления для фонового сервиса
@@ -66,8 +65,22 @@ class AudioService : Service() {
         super.onCreate()
         Log.d("checkData", "AudioService: onCreate")
         createNotificationChannel()
-        metronome = Metronome(this)
-        audioEngine = AudioEngine(this)
+        audioEngine = AudioEngine(this,
+            {
+                // Когда воспроизведение заканчивается, обновляем состояние
+                _isPlaying.value = false
+                if (!audioEngine.isRecording) {
+                    audioEngine.metronome.stop()
+                }
+            },
+            {
+                // Чтобы метроном начинал играть точно с началом проигрывания
+                _isPlaying.value = true
+                if (_isMetronomeEnabled.value)
+                    audioEngine.metronome.start()
+            }
+        )
+
     }
     override fun onStartCommand(intent: Intent, flags: Int, startId: Int): Int {
         val action = intent.action
@@ -76,7 +89,7 @@ class AudioService : Service() {
             ACTION_SWITCH_RECORDING -> {
                 if (audioEngine.isRecording) {
                     audioEngine.stopRecording()
-                    metronome.stop()
+                    audioEngine.metronome.stop()
                 }
                 else {
                     if (audioEngine.startRecording()) {
@@ -84,7 +97,7 @@ class AudioService : Service() {
                             audioEngine.stopPlayback()
                         }
                         if (_isMetronomeEnabled.value) {
-                            metronome.start()
+                            audioEngine.metronome.start()
                         }
                     }
                     else {
@@ -96,12 +109,12 @@ class AudioService : Service() {
                 if (!audioEngine.isRecording) { //Запрет смены режима прослушивания во время записи
                     if (audioEngine.isPlaying) {
                         audioEngine.stopPlayback()
-                        metronome.stop()
+                        audioEngine.metronome.stop()
                     }
                     else {
                         if (audioEngine.startPlayback()) {
                             if (_isMetronomeEnabled.value) {
-                                metronome.start()
+                                //metronome.start()
                             }
                         }
                     }
@@ -110,33 +123,33 @@ class AudioService : Service() {
             ACTION_SWITCH_METRONOME -> {
                 _isMetronomeEnabled.value = !_isMetronomeEnabled.value
                 if (audioEngine.isRecording || audioEngine.isPlaying) {
-                    if (metronome.isRunning) {
-                        metronome.stop()
+                    if (audioEngine.metronome.isRunning) {
+                        audioEngine.metronome.stop()
                     } else {
-                        metronome.start()
+                        audioEngine.metronome.start()
                     }
                 }
             }
             ACTION_SET_BPM -> {
                 val bpm = intent.getIntExtra(EXTRA_BPM, 120)
-                metronome.setBpm(bpm)
+                audioEngine.metronome.setBpm(bpm)
             }
             ACTION_STOP_SERVICE -> {
                 isStopped = true
                 stopForeground(STOP_FOREGROUND_REMOVE)
             }
             ACTION_INCREASE_BPM -> {
-                metronome.setBpm(metronome.getBpm + 1)
+                audioEngine.metronome.setBpm(audioEngine.metronome.getBpm + 1)
             }
             ACTION_DECREASE_BPM -> {
-                metronome.setBpm(metronome.getBpm - 1)
+                audioEngine.metronome.setBpm(audioEngine.metronome.getBpm - 1)
             }
         }
 
         _isRecording.value = audioEngine.isRecording
         _isPlaying.value = audioEngine.isPlaying
 
-        Log.d("checkData", "AudioService: onStartCommand")
+        //Log.d("checkData", "AudioService: onStartCommand")
 
         if (!isStopped)
             startForeground(notificationId, createNotification())
@@ -157,7 +170,7 @@ class AudioService : Service() {
         val toggleMetronomePendingIntent = PendingIntent.getService(this, 1, switchRecordingIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE)
 
         val icon : Int
-        val (title, text, buttonTitle) = if (metronome.isRunning) {
+        val (title, text, buttonTitle) = if (audioEngine.metronome.isRunning) {
             icon = R.drawable.ic_stop
             Triple("Запись звука", "Идет запись звука...", "Остановить запись")
         } else {
@@ -197,8 +210,9 @@ class AudioService : Service() {
         super.onDestroy()
         if (audioEngine.isRecording) audioEngine.stopRecording()
         if (audioEngine.isPlaying) audioEngine.stopPlayback()
-        metronome.stop()
-        metronome.release()
+        audioEngine.release()
+        audioEngine.metronome.stop()
+        audioEngine.metronome.release()
     }
 
     // Создаем канал уведомлений для API >= 26

@@ -1,13 +1,9 @@
 package com.example.advancedaudiorecorder.utils
 
-import android.os.Build
-import android.view.View
-import android.view.Window
-import android.view.WindowInsets
-import android.view.WindowInsetsController
-import android.view.WindowManager
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
+import android.content.Context
+import android.media.MediaCodec
+import android.media.MediaExtractor
+import android.media.MediaFormat
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -55,6 +51,127 @@ object FileUtils {
             FileInputStream(pcmFile).use { input ->
                 input.copyTo(output)
             }
+        }
+    }
+
+    //Получение массива PCM данных из файла OGG Vorbis
+    fun getPcmDataFromOgg(context: Context, rawResId: Int): ByteArray {
+        val assetFileDescriptor = context.resources.openRawResourceFd(rawResId)
+        val extractor = MediaExtractor()
+        extractor.setDataSource(
+            assetFileDescriptor.fileDescriptor,
+            assetFileDescriptor.startOffset,
+            assetFileDescriptor.length
+        )
+        assetFileDescriptor.close()
+
+        var audioTrackIndex = -1
+        var format: MediaFormat? = null
+
+        // Поиск аудиодорожки
+        for (i in 0 until extractor.trackCount) {
+            val trackFormat = extractor.getTrackFormat(i)
+            val mime = trackFormat.getString(MediaFormat.KEY_MIME) ?: continue
+            if (mime.startsWith("audio/")) {
+                audioTrackIndex = i
+                format = trackFormat
+                break
+            }
+        }
+
+        if (audioTrackIndex < 0 || format == null) {
+            throw IllegalArgumentException("No audio track found in resource")
+        }
+
+        extractor.selectTrack(audioTrackIndex)
+
+        val codec = MediaCodec.createDecoderByType(format.getString(MediaFormat.KEY_MIME)!!)
+        codec.configure(format, null, null, 0)
+        codec.start()
+
+        val bufferInfo = MediaCodec.BufferInfo()
+        val pcmData = mutableListOf<Byte>()
+
+        try {
+            val inputBuffers = codec.inputBuffers
+            val outputBuffers = codec.outputBuffers
+
+            while (true) {
+                // Загрузка данных в MediaCodec
+                val inputBufferIndex = codec.dequeueInputBuffer(10000)
+                if (inputBufferIndex >= 0) {
+                    val inputBuffer = inputBuffers[inputBufferIndex]
+                    val size = extractor.readSampleData(inputBuffer, 0)
+                    if (size >= 0) {
+                        codec.queueInputBuffer(
+                            inputBufferIndex,
+                            0,
+                            size,
+                            extractor.sampleTime,
+                            extractor.sampleFlags
+                        )
+                        extractor.advance()
+                    } else {
+                        codec.queueInputBuffer(
+                            inputBufferIndex,
+                            0,
+                            0,
+                            0,
+                            MediaCodec.BUFFER_FLAG_END_OF_STREAM
+                        )
+                        break
+                    }
+                }
+
+                // Извлечение PCM данных из MediaCodec
+                val outputBufferIndex = codec.dequeueOutputBuffer(bufferInfo, 10000)
+                if (outputBufferIndex >= 0) {
+                    val outputBuffer = outputBuffers[outputBufferIndex]
+                    val pcmChunk = ByteArray(bufferInfo.size)
+                    outputBuffer.position(bufferInfo.offset)
+                    outputBuffer.limit(bufferInfo.offset + bufferInfo.size)
+                    outputBuffer.get(pcmChunk)
+                    pcmData.addAll(pcmChunk.toList())
+                    codec.releaseOutputBuffer(outputBufferIndex, false)
+                } else if (outputBufferIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+                    // Формат изменился — обработка не требуется в большинстве случаев
+                }
+            }
+        } finally {
+            codec.stop()
+            codec.release()
+            extractor.release()
+        }
+
+        return pcmData.toByteArray()
+    }
+
+    fun getSampleRateFromOgg(context: Context, rawResId: Int): Int {
+        val assetFileDescriptor = context.resources.openRawResourceFd(rawResId)
+        val extractor = MediaExtractor()
+
+        try {
+            // Устанавливаем источник данных
+            extractor.setDataSource(
+                assetFileDescriptor.fileDescriptor,
+                assetFileDescriptor.startOffset,
+                assetFileDescriptor.length
+            )
+
+            // Ищем аудиотрек
+            for (i in 0 until extractor.trackCount) {
+                val format = extractor.getTrackFormat(i)
+                val mime = format.getString(MediaFormat.KEY_MIME) ?: continue
+                if (mime.startsWith("audio/")) {
+                    // Возвращаем частоту дискретизации
+                    return format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+                }
+            }
+
+            throw IllegalArgumentException("No audio track found in resource")
+        } finally {
+            extractor.release()
+            assetFileDescriptor.close()
         }
     }
 }
