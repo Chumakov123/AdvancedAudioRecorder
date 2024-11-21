@@ -15,6 +15,8 @@ import com.example.advancedaudiorecorder.presentation.main.MainActivity
 import com.example.advancedaudiorecorder.utils.FileUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
@@ -28,17 +30,12 @@ class AudioRecorder (private val context: Context) {
     private lateinit var audioRecord: AudioRecord
     private var selectedTrack = 0
 
-    var isRecording = false
+    private val _isRecording = MutableStateFlow(false)
+    val isRecording: StateFlow<Boolean> = _isRecording
 
     fun startRecording(trackId: Int): Boolean {
         // Проверка разрешения RECORD_AUDIO
-        if (ActivityCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
-            != PackageManager.PERMISSION_GRANTED
-        ) {
-            Toast.makeText(context, "Нет разрешения на запись", Toast.LENGTH_SHORT).show()
-            requestAudioPermission()
-            return false
-        }
+        if (!checkPermission()) return false
 
         selectedTrack = trackId
 
@@ -58,13 +55,13 @@ class AudioRecorder (private val context: Context) {
             bufferSize
         )
         audioRecord.startRecording()
-        isRecording = true
+        _isRecording.value = true
 
         // Запись в файл
         CoroutineScope(Dispatchers.IO).launch {
             FileOutputStream(audioFile).use { outputStream ->
                 val audioData = ByteArray(bufferSize)
-                while (isRecording && audioRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+                while (_isRecording.value && audioRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
                     val readBytes = audioRecord.read(audioData, 0, bufferSize)
                     if (readBytes > 0) {
                         outputStream.write(audioData, 0, readBytes)
@@ -75,7 +72,7 @@ class AudioRecorder (private val context: Context) {
         return true
     }
     fun stopRecording() {
-        isRecording = false
+        _isRecording.value = false
         audioRecord.stop()
         audioRecord.release()
         Toast.makeText(context, "Запись завершена", Toast.LENGTH_SHORT).show()
@@ -86,6 +83,17 @@ class AudioRecorder (private val context: Context) {
 
         FileUtils.convertPcmToWav(pcmFile, wavFile, sampleRate)
         //LogUtils.printPcmDataAsShorts(pcmFile) // Печать PCM для отладки
+    }
+
+    fun checkPermission() : Boolean {
+        if (ActivityCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            Toast.makeText(context, "Нет разрешения на запись", Toast.LENGTH_SHORT).show()
+            requestAudioPermission()
+            return false
+        }
+        return true
     }
 
     private fun requestAudioPermission() {

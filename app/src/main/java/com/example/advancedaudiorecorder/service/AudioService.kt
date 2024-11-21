@@ -38,19 +38,18 @@ class AudioService : Service() {
         const val ACTION_STOP_SERVICE = "com.example.ACTION_STOP_SERVICE"
     }
 
+    private lateinit var audioEngine: AudioEngine
+
     private val _permissionRequest = MutableLiveData<String>()
     val permissionRequest: LiveData<String> = _permissionRequest
 
-    private val _isPlaying = MutableStateFlow(false)
-    val isPlaying: StateFlow<Boolean> = _isPlaying
+    private lateinit var _isPlaying: StateFlow<Boolean>
+    private lateinit var _isRecording: StateFlow<Boolean>
+    private lateinit var _isMetronomeEnabled: StateFlow<Boolean>
 
-    private val _isRecording = MutableStateFlow(false)
-    val isRecording: StateFlow<Boolean> = _isRecording
-
-    private val _isMetronomeEnabled = MutableStateFlow(true)
-    val isMetronomeEnabled: StateFlow<Boolean> = _isMetronomeEnabled
-
-    private lateinit var audioEngine: AudioEngine
+    val isPlaying: StateFlow<Boolean> get() = _isPlaying
+    val isRecording: StateFlow<Boolean> get() = _isRecording
+    val isMetronomeEnabled: StateFlow<Boolean> get() = _isMetronomeEnabled
 
     // Пример уведомления для фонового сервиса
     private val channelId = "audio_service_channel"
@@ -65,21 +64,10 @@ class AudioService : Service() {
         super.onCreate()
         Log.d("checkData", "AudioService: onCreate")
         createNotificationChannel()
-        audioEngine = AudioEngine(this,
-            {
-                // Когда воспроизведение заканчивается, обновляем состояние
-                _isPlaying.value = false
-                if (!audioEngine.isRecording) {
-                    audioEngine.metronome.stop()
-                }
-            },
-            {
-                // Чтобы метроном начинал играть точно с началом проигрывания
-                _isPlaying.value = true
-                if (_isMetronomeEnabled.value)
-                    audioEngine.metronome.start()
-            }
-        )
+        audioEngine = AudioEngine(this)
+        _isPlaying = audioEngine.isPlaying
+        _isRecording = audioEngine.isRecording
+        _isMetronomeEnabled = audioEngine.isMetronomeEnabled
 
     }
     override fun onStartCommand(intent: Intent, flags: Int, startId: Int): Int {
@@ -87,17 +75,13 @@ class AudioService : Service() {
         var isStopped = false
         when (action) {
             ACTION_SWITCH_RECORDING -> {
-                if (audioEngine.isRecording) {
+                if (audioEngine.isRecording.value) {
                     audioEngine.stopRecording()
-                    audioEngine.metronome.stop()
                 }
                 else {
                     if (audioEngine.startRecording()) {
-                        if (audioEngine.isPlaying) { //Остановка проигрывания при начале записи
+                        if (audioEngine.isPlaying.value) { //Остановка проигрывания при начале записи
                             audioEngine.stopPlayback()
-                        }
-                        if (_isMetronomeEnabled.value) {
-                            audioEngine.metronome.start()
                         }
                     }
                     else {
@@ -106,29 +90,17 @@ class AudioService : Service() {
                 }
             }
             ACTION_SWITCH_PLAYING -> {
-                if (!audioEngine.isRecording) { //Запрет смены режима прослушивания во время записи
-                    if (audioEngine.isPlaying) {
+                if (!audioEngine.isRecording.value) { //Запрет смены режима прослушивания во время записи
+                    if (audioEngine.isPlaying.value) {
                         audioEngine.stopPlayback()
-                        audioEngine.metronome.stop()
                     }
                     else {
-                        if (audioEngine.startPlayback()) {
-                            if (_isMetronomeEnabled.value) {
-                                //metronome.start()
-                            }
-                        }
+                        audioEngine.startPlayback()
                     }
                 }
             }
             ACTION_SWITCH_METRONOME -> {
-                _isMetronomeEnabled.value = !_isMetronomeEnabled.value
-                if (audioEngine.isRecording || audioEngine.isPlaying) {
-                    if (audioEngine.metronome.isRunning) {
-                        audioEngine.metronome.stop()
-                    } else {
-                        audioEngine.metronome.start()
-                    }
-                }
+                audioEngine.switchMetronome()
             }
             ACTION_SET_BPM -> {
                 val bpm = intent.getIntExtra(EXTRA_BPM, 120)
@@ -145,10 +117,6 @@ class AudioService : Service() {
                 audioEngine.metronome.setBpm(audioEngine.metronome.getBpm - 1)
             }
         }
-
-        _isRecording.value = audioEngine.isRecording
-        _isPlaying.value = audioEngine.isPlaying
-
         //Log.d("checkData", "AudioService: onStartCommand")
 
         if (!isStopped)
@@ -200,7 +168,7 @@ class AudioService : Service() {
             .build()
     }
 
-    override fun onBind(intent: Intent?): IBinder? {
+    override fun onBind(intent: Intent?): IBinder {
         Log.d("checkData", "AudioService: onBind")
         return binder
     }
@@ -208,11 +176,7 @@ class AudioService : Service() {
     override fun onDestroy() {
         Log.d("checkData", "AudioService: onDestroy")
         super.onDestroy()
-        if (audioEngine.isRecording) audioEngine.stopRecording()
-        if (audioEngine.isPlaying) audioEngine.stopPlayback()
         audioEngine.release()
-        audioEngine.metronome.stop()
-        audioEngine.metronome.release()
     }
 
     // Создаем канал уведомлений для API >= 26

@@ -8,8 +8,10 @@ import androidx.media3.exoplayer.ExoPlayer
 import com.example.advancedaudiorecorder.R
 import com.example.advancedaudiorecorder.utils.FileUtils
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
-class Metronome(private val context: Context, private val exoPlayer: ExoPlayer) {
+class Metronome(private val context: Context) {
     private var bpm: Int = 120
     private var metronomeJob: Job? = null
     private var interval = calculateInterval(bpm)
@@ -125,6 +127,7 @@ class Metronome(private val context: Context, private val exoPlayer: ExoPlayer) 
 
     // Очистка ресурсов
     fun release() {
+        stop()
         audioTrack.release()
     }
 }

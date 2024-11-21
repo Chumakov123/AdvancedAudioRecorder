@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import com.example.advancedaudiorecorder.audio.AudioEngine
 import com.example.advancedaudiorecorder.presentation.components.BottomBar
 import com.example.advancedaudiorecorder.presentation.components.Playlist
 import com.example.advancedaudiorecorder.presentation.components.TopBar
