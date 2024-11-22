@@ -18,12 +18,13 @@ fun MainScreen(
     onSwitchMetronome: () -> Unit,
     isRecording: Boolean,
     isPlaying: Boolean,
-    isMetronomeEnabled: Boolean
+    isMetronomeEnabled: Boolean,
+    audioEngine: AudioEngine?
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         TopBar()
         Box(modifier = Modifier.weight(1f)) {
-            Playlist()
+            Playlist(audioEngine)
         }
         BottomBar(
             onSwitchRecording = onSwitchRecording,

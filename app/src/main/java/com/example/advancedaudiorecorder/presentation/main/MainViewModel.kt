@@ -5,6 +5,7 @@ import android.content.Intent
 import androidx.compose.runtime.mutableStateOf
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
+import com.example.advancedaudiorecorder.audio.AudioEngine
 import com.example.advancedaudiorecorder.service.AudioService
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -12,6 +13,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val isRecording = mutableStateOf(false)
     val isPlaying = mutableStateOf(false)
     val isMetronomeEnabled = mutableStateOf(false)
+
+    val audioEngine = mutableStateOf<AudioEngine?>(null)
 
     fun updateRecordingState(isRecordingNow: Boolean) {
         isRecording.value = isRecordingNow
@@ -21,6 +24,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun updateMetronomeState(isMetronomeEnabledNow: Boolean) {
         isMetronomeEnabled.value = isMetronomeEnabledNow
+    }
+
+    fun updateAudioEngineState(audioEngineNow: AudioEngine) {
+        audioEngine.value = audioEngineNow
     }
 
     fun switchRecording() {
@@ -33,7 +40,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         sendCommandToService(AudioService.ACTION_SWITCH_METRONOME)
     }
 
-    private fun sendCommandToService(action: String) {
+     fun sendCommandToService(action: String) {
         val intent = Intent(getApplication(), AudioService::class.java).apply {
             this.action = action
         }

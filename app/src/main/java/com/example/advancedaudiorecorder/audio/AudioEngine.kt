@@ -4,11 +4,12 @@ import android.content.Context
 import android.util.Log
 import android.widget.Toast
 import androidx.annotation.OptIn
+import androidx.compose.runtime.mutableStateListOf
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 @OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
-class AudioEngine (
+open class AudioEngine (
     private val context: Context,
 )   {
 
@@ -21,8 +22,10 @@ class AudioEngine (
 
     private var mode : Mode = Mode.IDLE
 
-    val tracks: MutableList<Track> = mutableListOf()
-    var selectedTrackIndex = 0
+    val tracks = mutableStateListOf<Track>()
+
+    private val _selectedTrackIndex = MutableStateFlow(0)
+    val selectedTrackIndex: StateFlow<Int> = _selectedTrackIndex
 
     val isRecording: StateFlow<Boolean> = audioRecorder.isRecording
 
@@ -33,6 +36,7 @@ class AudioEngine (
     val isMetronomeEnabled: StateFlow<Boolean> = _isMetronomeEnabled
 
     init {
+        Log.d("checkData", "init audio engine")
         repeat(3) { addTrack() }
     }
 
@@ -46,6 +50,11 @@ class AudioEngine (
             tracks[index].release()
             tracks.removeAt(index)
         }
+    }
+
+    fun selectTrack(index: Int) {
+        if (tracks.count() > index && index >= 0)
+            _selectedTrackIndex.value = index
     }
 
     fun onPlaybackComplete() {
@@ -74,9 +83,9 @@ class AudioEngine (
             Log.d("checkData", "${allReady(true)}")
             if (allReady(true)) {
                 mode = Mode.RECORD
-                audioRecorder.startRecording(selectedTrackIndex)
+                audioRecorder.startRecording(_selectedTrackIndex.value)
                 tracks.forEach {
-                    if (it.id != selectedTrackIndex)
+                    if (it.id != _selectedTrackIndex.value)
                         it.startPlaybackIfEnabled()
                 }
                 if (_isMetronomeEnabled.value)
@@ -90,7 +99,7 @@ class AudioEngine (
         Log.d("checkData", "startRecording()")
         mode = Mode.PREPARE_RECORD
         tracks.forEach {
-            if (it.id != selectedTrackIndex)
+            if (it.id != _selectedTrackIndex.value)
                 it.preparePlaybackIfEnabled()
         }
         onPlaybackReady()
@@ -119,11 +128,11 @@ class AudioEngine (
     }
 
     private fun allReady(excludeSelected : Boolean = false) : Boolean {
-        return tracks.all {it.isReady() || (excludeSelected && it.id == selectedTrackIndex)}
+        return tracks.all {it.isReady() || (excludeSelected && it.id == _selectedTrackIndex.value)}
     }
 
     private fun allCompleted(excludeSelected : Boolean = false) : Boolean {
-        return tracks.all {it.isCompleted() || (excludeSelected && it.id == selectedTrackIndex)}
+        return tracks.all {it.isCompleted() || (excludeSelected && it.id == _selectedTrackIndex.value)}
     }
 
     fun switchMetronome() {

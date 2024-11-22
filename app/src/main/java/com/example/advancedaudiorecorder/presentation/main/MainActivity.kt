@@ -25,6 +25,8 @@ import com.example.advancedaudiorecorder.service.AudioService
 import com.example.advancedaudiorecorder.ui.theme.AdvancedAudioRecorderTheme
 import kotlinx.coroutines.launch
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.test.platform.app.InstrumentationRegistry
+import com.example.advancedaudiorecorder.audio.AudioEngine
 import com.example.advancedaudiorecorder.presentation.screens.MainScreen
 import com.example.advancedaudiorecorder.utils.UiUtils
 import kotlinx.coroutines.flow.combine
@@ -43,6 +45,11 @@ class MainActivity : ComponentActivity() {
             val localBinder = binder as AudioService.LocalBinder
             audioService = localBinder.getService()
             bound = true
+
+            audioService?.let { service ->
+                val engine = service.audioEngine // Получаем AudioEngine из сервиса
+                mainViewModel.updateAudioEngineState(engine)  // Передаем в ViewModel
+            }
 
             audioService?.permissionRequest?.observe(this@MainActivity) { permission ->
                 requestPermission(permission)
@@ -73,6 +80,7 @@ class MainActivity : ComponentActivity() {
         // Привязываем сервис
         val intent = Intent(this, AudioService::class.java)
         bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+        mainViewModel.sendCommandToService("START") //Такой команды нет, но нужно просто запустить сервис
     }
 
     override fun onStop() {
@@ -109,7 +117,8 @@ class MainActivity : ComponentActivity() {
                         onSwitchMetronome = { mainViewModel.switchMetronome() },
                         isRecording = mainViewModel.isRecording.value,
                         isPlaying = mainViewModel.isPlaying.value,
-                        isMetronomeEnabled = mainViewModel.isMetronomeEnabled.value
+                        isMetronomeEnabled = mainViewModel.isMetronomeEnabled.value,
+                        audioEngine = mainViewModel.audioEngine.value
                     )
                 }
             }
@@ -127,16 +136,30 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@Preview(showBackground = true)
-@Composable
-fun MainScreenPreview() {
-    MainScreen(
-        modifier = Modifier,
-        onSwitchRecording = {},
-        onSwitchPlaying = {},
-        onSwitchMetronome =  {},
-        isRecording = false,
-        isPlaying = false,
-        isMetronomeEnabled = false
-    )
+//@Preview(showBackground = true)
+//@Composable
+//fun MainScreenPreview() {
+//    MainScreen(
+//        modifier = Modifier,
+//        onSwitchRecording = {},
+//        onSwitchPlaying = {},
+//        onSwitchMetronome =  {},
+//        isRecording = false,
+//        isPlaying = false,
+//        isMetronomeEnabled = false
+//
+//    )
+//}
+
+class MockAudioEngine : AudioEngine(
+    context = mockContext()
+) {
+    init {
+        // Инициализируйте фиктивные треки, если требуется
+        addTrack()
+        addTrack()
+    }
 }
+
+// Вспомогательная функция для создания фиктивного контекста
+fun mockContext(): Context = InstrumentationRegistry.getInstrumentation().targetContext

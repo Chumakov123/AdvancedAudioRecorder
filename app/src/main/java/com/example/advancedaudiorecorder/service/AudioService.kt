@@ -38,7 +38,7 @@ class AudioService : Service() {
         const val ACTION_STOP_SERVICE = "com.example.ACTION_STOP_SERVICE"
     }
 
-    private lateinit var audioEngine: AudioEngine
+    lateinit var audioEngine: AudioEngine
 
     private val _permissionRequest = MutableLiveData<String>()
     val permissionRequest: LiveData<String> = _permissionRequest

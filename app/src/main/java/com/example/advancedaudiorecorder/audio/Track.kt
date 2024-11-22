@@ -2,11 +2,14 @@ package com.example.advancedaudiorecorder.audio
 
 import android.content.Context
 import android.os.Environment
+import androidx.compose.runtime.mutableStateOf
 import androidx.core.net.toUri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import java.io.File
 
 class Track (
@@ -15,7 +18,7 @@ class Track (
     private val onPlaybackComplete: () -> Unit,
     private val onPlaybackReady: () -> Unit
 ) {
-    var isEnabled = true
+    var isEnabled by mutableStateOf(true)
     var isLooping = false
     var volume = 1f
     var pitch = 1f
