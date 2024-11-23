@@ -1,7 +1,9 @@
 package com.example.advancedaudiorecorder.presentation.main
 
+import android.app.Activity
 import android.content.ComponentName
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.content.ServiceConnection
 import android.os.Bundle
@@ -13,6 +15,8 @@ import androidx.activity.result.ActivityResult
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
@@ -32,6 +36,7 @@ import com.example.advancedaudiorecorder.utils.UiUtils
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import java.security.Permissions
+import kotlin.system.exitProcess
 
 class MainActivity : ComponentActivity() {
     private lateinit var permissionLauncher: ActivityResultLauncher<String>
@@ -80,7 +85,7 @@ class MainActivity : ComponentActivity() {
         // Привязываем сервис
         val intent = Intent(this, AudioService::class.java)
         bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
-        mainViewModel.sendCommandToService("START") //Такой команды нет, но нужно просто запустить сервис
+        mainViewModel.startService()
     }
 
     override fun onStop() {
@@ -102,13 +107,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         registerPermissionListener()
-        enableEdgeToEdge()
+        //enableEdgeToEdge()
         setContent {
             AdvancedAudioRecorderTheme {
                 Scaffold(
                     modifier = Modifier
                         .fillMaxSize()
-                        .windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.statusBars)
+                        .windowInsetsPadding(WindowInsets.displayCutout)
                 ) { innerPadding ->
                     MainScreen(
                         modifier = Modifier.padding(innerPadding),
@@ -118,12 +123,24 @@ class MainActivity : ComponentActivity() {
                         isRecording = mainViewModel.isRecording.value,
                         isPlaying = mainViewModel.isPlaying.value,
                         isMetronomeEnabled = mainViewModel.isMetronomeEnabled.value,
-                        audioEngine = mainViewModel.audioEngine.value
+                        audioEngine = mainViewModel.audioEngine.value,
+                        onExitConfirmed = { exitApplication() }
                     )
                 }
             }
         }
     }
+
+    fun exitApplication() {
+        mainViewModel.stopService()
+        //val intent = Intent(context, AudioService::class.java)
+        //context.stopService(intent)
+
+        // Закрытие приложения
+        this.finish()
+        exitProcess(0) // Завершение процесса приложения
+    }
+
     fun requestPermission(permission : String) {
         permissionLauncher.launch(permission)
     }
@@ -136,30 +153,18 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-//@Preview(showBackground = true)
-//@Composable
-//fun MainScreenPreview() {
-//    MainScreen(
-//        modifier = Modifier,
-//        onSwitchRecording = {},
-//        onSwitchPlaying = {},
-//        onSwitchMetronome =  {},
-//        isRecording = false,
-//        isPlaying = false,
-//        isMetronomeEnabled = false
-//
-//    )
-//}
-
-class MockAudioEngine : AudioEngine(
-    context = mockContext()
-) {
-    init {
-        // Инициализируйте фиктивные треки, если требуется
-        addTrack()
-        addTrack()
-    }
+@Preview(showBackground = true)
+@Composable
+fun MainScreenPreview() {
+    MainScreen(
+        modifier = Modifier,
+        onSwitchRecording = {},
+        onSwitchPlaying = {},
+        onSwitchMetronome = {},
+        onExitConfirmed = {},
+        isRecording = false,
+        isPlaying = false,
+        isMetronomeEnabled = false,
+        audioEngine = null
+    )
 }
-
-// Вспомогательная функция для создания фиктивного контекста
-fun mockContext(): Context = InstrumentationRegistry.getInstrumentation().targetContext

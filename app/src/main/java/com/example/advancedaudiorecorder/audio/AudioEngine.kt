@@ -37,7 +37,7 @@ open class AudioEngine (
 
     init {
         Log.d("checkData", "init audio engine")
-        repeat(3) { addTrack() }
+        repeat(2) { addTrack() }
     }
 
     fun addTrack() {

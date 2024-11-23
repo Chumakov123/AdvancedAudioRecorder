@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import com.example.advancedaudiorecorder.audio.AudioEngine
 import com.example.advancedaudiorecorder.presentation.components.BottomBar
 import com.example.advancedaudiorecorder.presentation.components.Playlist
@@ -19,10 +20,11 @@ fun MainScreen(
     isRecording: Boolean,
     isPlaying: Boolean,
     isMetronomeEnabled: Boolean,
-    audioEngine: AudioEngine?
+    audioEngine: AudioEngine?,
+    onExitConfirmed: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
-        TopBar()
+        TopBar(onExitConfirmed)
         Box(modifier = Modifier.weight(1f)) {
             Playlist(audioEngine)
         }

@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.advancedaudiorecorder.R
 
@@ -64,7 +65,7 @@ fun BottomBar(
                     painter = painterResource(id = R.drawable.ic_rewind),
                     contentDescription = "Перемотать в начало",
                     modifier = Modifier.size(50.dp),
-                    tint = Color.Unspecified
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer
                 )
             }
             IconButton(onClick = { onSwitchRecording() },
@@ -85,7 +86,7 @@ fun BottomBar(
                     painter = painterResource(id = if (isPlaying) R.drawable.ic_pause_audio else R.drawable.ic_play_audio),
                     contentDescription = "Проиграть",
                     modifier = Modifier.size(50.dp),
-                    tint = Color.Unspecified
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer
                 )
             }
         }
@@ -96,14 +97,27 @@ fun BottomBar(
                 .align(Alignment.CenterEnd)
                 .padding(end = 8.dp)
                 .size(45.dp)
-                .background(if (isMetronomeEnabled) Color(0xFFBB86FC) else Color.Transparent, shape = CircleShape) // Подсветка, если включен
+                .background(if (isMetronomeEnabled) MaterialTheme.colorScheme.inversePrimary else Color.Transparent, shape = CircleShape) // Подсветка, если включен
         ) {
             Icon(
                 painter = painterResource(id = R.drawable.ic_metronome),
                 contentDescription = "Метроном",
                 modifier = Modifier.size(45.dp),
-                tint = Color.Unspecified
+                tint = MaterialTheme.colorScheme.onSecondaryContainer
             )
         }
     }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun BottomBarPreview() {
+    BottomBar (
+        onSwitchRecording = {},
+        onSwitchPlaying = {},
+        onSwitchMetronome = {},
+        isRecording = false,
+        isPlaying = false,
+        isMetronomeEnabled = true
+    )
 }
