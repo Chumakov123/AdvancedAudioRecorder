@@ -1,12 +1,11 @@
 package com.example.advancedaudiorecorder.presentation.components
 
-import androidx.compose.foundation.clickable
+import androidx.annotation.OptIn
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.LazyListLayoutInfo
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,6 +15,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.media3.common.util.Log
+import androidx.media3.common.util.UnstableApi
 import kotlinx.coroutines.flow.filter
 
 @Composable
@@ -83,6 +84,7 @@ fun MusicalTimePickerButton() {
     }
 }
 
+@OptIn(UnstableApi::class)
 @Composable
 fun InfiniteNumberPicker(
     range: Iterable<Int>,
@@ -92,14 +94,34 @@ fun InfiniteNumberPicker(
     val items = range.toList()
     val itemCount = items.size
 
-    // Находим индекс выбранного элемента
-    val initialIndex = items.indexOf(selectedValue).takeIf { it >= 0 } ?: (2)
-
+// Находим индекс выбранного элемента
+    val initialIndex = Int.MAX_VALUE / 2 - (Int.MAX_VALUE / 2 % itemCount) + items.indexOf(selectedValue) - 1
     // Инициализация состояния списка с учетом цикличности
-    val listState = rememberLazyListState(
-        // Устанавливаем начальную позицию так, чтобы выбранный элемент был в центре
-        initialFirstVisibleItemIndex = Int.MAX_VALUE / 2 - (itemCount / 2) + initialIndex
-    )
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialIndex)
+
+    LaunchedEffect(selectedValue) {
+        snapshotFlow { listState.isScrollInProgress }
+            .filter { !it }
+            .collect {
+                val center = listState.layoutInfo.viewportEndOffset / 2
+                val visibleItems = listState.layoutInfo.visibleItemsInfo
+                val centralItem = visibleItems.minByOrNull { item ->
+                    val itemCenter = (item.offset + item.size / 2)
+                    kotlin.math.abs(itemCenter - center)
+                }
+                centralItem?.let {
+                    val centralIndex = it.index
+                    val newValue = items[centralIndex % itemCount]
+                    if (newValue != selectedValue) {
+                        onValueChange(newValue)
+                    }
+                    listState.animateScrollToItemCenter(
+                        index = centralIndex - 1
+                    )
+                }
+                Log.d("checkData","scroll")
+            }
+    }
 
     LazyColumn(
         state = listState,
@@ -117,21 +139,26 @@ fun InfiniteNumberPicker(
                 color = if (value == selectedValue) MaterialTheme.colorScheme.primary else Color.Unspecified,
                 modifier = Modifier
                     .padding(8.dp)
-                    .clickable { onValueChange(value) }
             )
         }
     }
+}
 
-    // Центрирование на ближайший элемент после остановки прокрутки
-    LaunchedEffect(listState) {
-        snapshotFlow { listState.isScrollInProgress }
-            .filter { !it } // Срабатывает, когда прокрутка завершена
-            .collect {
-                val index = listState.firstVisibleItemIndex % itemCount
-                val centeredValue = items[index]
-                if (centeredValue != selectedValue) {
-                    onValueChange(centeredValue)
-                }
-            }
+suspend fun LazyListState.animateScrollToItemCenter(index: Int) {
+    layoutInfo.resolveItemOffsetToCenter(index)?.let {
+        animateScrollToItem(index, it)
+        return
     }
+
+    scrollToItem(index)
+
+    layoutInfo.resolveItemOffsetToCenter(index)?.let {
+        animateScrollToItem(index, it)
+    }
+}
+
+private fun LazyListLayoutInfo.resolveItemOffsetToCenter(index: Int): Int? {
+    val itemInfo = visibleItemsInfo.firstOrNull { it.index == index } ?: return null
+    val containerSize = viewportSize.width - beforeContentPadding - afterContentPadding
+    return -(containerSize - itemInfo.size) / 2
 }
