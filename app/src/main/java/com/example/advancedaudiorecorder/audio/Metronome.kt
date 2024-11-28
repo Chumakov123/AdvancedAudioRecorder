@@ -12,12 +12,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 class Metronome(private val context: Context) {
-    private var bpm: Int = 120
+
+    private val _bpm = MutableStateFlow(120)
+    val bpm: StateFlow<Int> = _bpm
+
     private var metronomeJob: Job? = null
-    private var interval = calculateInterval(bpm)
+    private var interval = calculateInterval(_bpm.value)
 
     val getBpm: Int
-        get() = bpm
+        get() = _bpm.value
 
     val isRunning: Boolean
         get() = metronomeJob?.isActive == true
@@ -25,6 +28,9 @@ class Metronome(private val context: Context) {
     private lateinit var audioTrack: AudioTrack
     private var audioData: ByteArray
     private var audioSampleRate: Int = 0
+
+    private val _volume = MutableStateFlow(1f)
+    val volume: StateFlow<Float> = _volume
 
     @SuppressLint("NewApi")
     fun initialize() {
@@ -42,6 +48,7 @@ class Metronome(private val context: Context) {
             .build()
 
         audioTrack.write(audioData, 0, audioData.size) // Загрузка PCM в AudioTrack
+        updateVolume()
     }
 
     init {
@@ -103,8 +110,9 @@ class Metronome(private val context: Context) {
 
     // Изменение темпа
     fun setBpm(newBpm: Int) {
-        bpm = newBpm
-        interval = calculateInterval(bpm) // Пересчитываем интервал
+        if (_bpm.value == newBpm) return
+        _bpm.value = newBpm
+        interval = calculateInterval(_bpm.value) // Пересчитываем интервал
     }
 
     // Вычисление интервала на основе BPM
@@ -122,6 +130,18 @@ class Metronome(private val context: Context) {
             0L // Если время на начало такта, первый тик сразу
         } else {
             interval - timeSinceTrackStart // Время до следующего такта
+        }
+    }
+
+    fun setVolume(newVolume: Float) {
+        _volume.value = newVolume.coerceIn(0.0f, 1.0f) // Ограничиваем значение между 0.0 и 1.0
+        updateVolume()
+    }
+
+    // Применение уровня громкости к AudioTrack
+    private fun updateVolume() {
+        if (::audioTrack.isInitialized) {
+            audioTrack.setVolume(_volume.value)
         }
     }
 

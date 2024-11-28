@@ -4,7 +4,6 @@ import android.util.Log
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -44,8 +43,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun BpmControlPanel(
     currentTempo: Int,
-    onTempoChange: (Int) -> Unit, // Функция изменения темпа
-    onTapTempo: (List<Long>) -> Unit // Функция для обработки настукивания темпа
+    onChangeTempo: (Int) -> Unit // Функция для обработки настукивания темпа
 ) {
     var tempo by remember { mutableIntStateOf(currentTempo) }
     var isIncreasing by remember { mutableStateOf(false) }
@@ -57,7 +55,7 @@ fun BpmControlPanel(
     LaunchedEffect(isIncreasing, isDecreasing) {
         while (isIncreasing || isDecreasing) {
             tempo = (tempo + if (isIncreasing) 1 else -1).coerceIn(30, 300) // Ограничение диапазона темпа
-            onTempoChange(tempo)
+            onChangeTempo(tempo)
             delay(100) // Интервал изменения
         }
     }
@@ -117,18 +115,22 @@ fun BpmControlPanel(
 
             // Центральная кнопка (отображение текущего темпа)
             Box(
-                modifier = Modifier.combinedClickable(
-                    onClick = { Log.d("checkData","Click bpm")
-                        val now = System.currentTimeMillis()
-                        tapTimes = (tapTimes + now).takeLast(8) // Сохраняем последние 8 удара
-                        if (tapTimes.size > 1) {
-                            val avgInterval = tapTimes.zipWithNext { a, b -> b - a }.average().toLong()
-                            val calculatedTempo = (60000 / avgInterval).toInt()
-                            onTapTempo(tapTimes)
-                            tempo = calculatedTempo.coerceIn(30, 300)
-                        } },
-                    onLongClick = { showDialog = true } // Показать контекстное меню при удерживании
-                ).padding(0.dp),
+                modifier = Modifier.padding(0.dp)
+                    .pointerInput(Unit) {
+                    detectTapGestures(
+                        onPress = {
+                            val now = System.currentTimeMillis()
+                            tapTimes = (tapTimes + now).takeLast(8) // Сохраняем последние 8 удара
+                            if (tapTimes.size > 1) {
+                                val avgInterval = tapTimes.zipWithNext { a, b -> b - a }.average().toLong()
+                                val calculatedTempo = (60000 / avgInterval).toInt()
+                                tempo = calculatedTempo.coerceIn(30, 300)
+                            }
+                            onChangeTempo(tempo)
+                        },
+                        onLongPress = { showDialog = true }
+                    )
+                },
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -142,7 +144,6 @@ fun BpmControlPanel(
             // Диалог ввода темпа
             var inputTempo by remember { mutableStateOf(tempo.toString()) }
             if (showDialog) {
-                Log.d("checkData", "showDialog")
                 AlertDialog(
                     onDismissRequest = { showDialog = false },
                     title = { Text("Введите темп") },
@@ -158,8 +159,8 @@ fun BpmControlPanel(
                     confirmButton = {
                         TextButton(onClick = {
                             tempo = inputTempo.toIntOrNull()?.coerceIn(30, 300) ?: tempo
-                            onTempoChange(tempo)
                             showDialog = false
+                            onChangeTempo(tempo)
                         }) {
                             Text("OK")
                         }
@@ -211,10 +212,8 @@ fun BpmControlPanel(
             Modifier.pointerInput(Unit) {
                 detectTapGestures(
                     onPress = {
-                        Log.d("checkData", "IncreasingON")
                         isIncreasing = true
                         tryAwaitRelease()
-                        Log.d("checkData", "IncreasingOFF")
                         isIncreasing = false
                     }
                 )
@@ -226,5 +225,5 @@ fun BpmControlPanel(
 @Preview(showBackground = true)
 @Composable
 fun BpmControlPanelPreview() {
-    BpmControlPanel(120, {}, {})
+    BpmControlPanel(120, {})
 }

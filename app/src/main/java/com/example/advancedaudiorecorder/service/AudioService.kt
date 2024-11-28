@@ -20,6 +20,7 @@ import com.example.advancedaudiorecorder.presentation.main.MainActivity
 import com.example.advancedaudiorecorder.R
 import com.example.advancedaudiorecorder.audio.AudioEngine
 import com.example.advancedaudiorecorder.audio.Metronome
+import com.example.advancedaudiorecorder.preferences.AppPreferences
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -29,11 +30,6 @@ class AudioService : Service() {
         const val ACTION_SWITCH_RECORDING = "com.example.ACTION_SWITCH_RECORDING"
         const val ACTION_SWITCH_METRONOME = "com.example.ACTION_SWITCH_METRONOME"
         const val ACTION_SWITCH_PLAYING = "com.example.ACTION_SWITCH_PLAYING"
-
-        const val ACTION_SET_BPM = "com.example.ACTION_SET_BPM"
-        const val EXTRA_BPM = "com.example.EXTRA_BPM"
-        const val ACTION_INCREASE_BPM = "com.example.ACTION_INCREASE_BPM"
-        const val ACTION_DECREASE_BPM = "com.example.ACTION_DECREASE_BPM"
 
         const val ACTION_STOP_SERVICE = "com.example.ACTION_STOP_SERVICE"
     }
@@ -102,19 +98,11 @@ class AudioService : Service() {
             ACTION_SWITCH_METRONOME -> {
                 audioEngine.switchMetronome()
             }
-            ACTION_SET_BPM -> {
-                val bpm = intent.getIntExtra(EXTRA_BPM, 120)
-                audioEngine.metronome.setBpm(bpm)
-            }
             ACTION_STOP_SERVICE -> {
                 isStopped = true
+                savePreferences()
+                stopSelf()
                 stopForeground(STOP_FOREGROUND_REMOVE)
-            }
-            ACTION_INCREASE_BPM -> {
-                audioEngine.metronome.setBpm(audioEngine.metronome.getBpm + 1)
-            }
-            ACTION_DECREASE_BPM -> {
-                audioEngine.metronome.setBpm(audioEngine.metronome.getBpm - 1)
             }
         }
         //Log.d("checkData", "AudioService: onStartCommand")
@@ -177,6 +165,10 @@ class AudioService : Service() {
         Log.d("checkData", "AudioService: onDestroy")
         super.onDestroy()
         audioEngine.release()
+    }
+
+    private fun savePreferences() {
+        audioEngine.savePreferences()
     }
 
     // Создаем канал уведомлений для API >= 26

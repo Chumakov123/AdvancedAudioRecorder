@@ -28,7 +28,8 @@ fun BottomBar(
     onSwitchMetronome: () -> Unit,
     isRecording: Boolean,
     isPlaying: Boolean,
-    isMetronomeEnabled: Boolean
+    isMetronomeEnabled: Boolean,
+    onSettingsOpen: () -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -39,16 +40,16 @@ fun BottomBar(
         contentAlignment = Alignment.Center
     ) {
         IconButton(
-            onClick = { /* TODO Действие для микшера */ },
+            onClick = { onSettingsOpen() },
             modifier = Modifier
                 .align(Alignment.CenterStart)
-                .padding(start = 8.dp)
-                .size(60.dp)
+                .padding(start = 18.dp)
+                .size(40.dp)
         ) {
             Icon(
-                painter = painterResource(id = R.drawable.ic_mixer),
-                contentDescription = "Микшер",
-                modifier = Modifier.size(60.dp),
+                painter = painterResource(id = R.drawable.ic_settings),
+                contentDescription = "Настройки",
+                modifier = Modifier.size(30.dp),
                 tint = Color.Unspecified
             )
         }
@@ -118,6 +119,7 @@ fun BottomBarPreview() {
         onSwitchMetronome = {},
         isRecording = false,
         isPlaying = false,
-        isMetronomeEnabled = true
+        isMetronomeEnabled = true,
+        onSettingsOpen = {}
     )
 }

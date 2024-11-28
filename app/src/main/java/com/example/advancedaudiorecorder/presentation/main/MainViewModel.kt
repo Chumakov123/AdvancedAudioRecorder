@@ -1,38 +1,49 @@
 package com.example.advancedaudiorecorder.presentation.main
 
-import android.app.Activity
 import android.app.Application
-import android.content.Context
 import android.content.Intent
-import androidx.compose.runtime.mutableStateOf
+import android.net.Uri
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import com.example.advancedaudiorecorder.audio.AudioEngine
 import com.example.advancedaudiorecorder.service.AudioService
-import kotlin.system.exitProcess
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
-    val isRecording = mutableStateOf(false)
-    val isPlaying = mutableStateOf(false)
-    val isMetronomeEnabled = mutableStateOf(false)
+    private val _state = MutableStateFlow(AudioState())
+    val state: StateFlow<AudioState> = _state
 
-    val audioEngine = mutableStateOf<AudioEngine?>(null)
+    val isRecording = state.map { it.isRecording }.stateIn(viewModelScope, SharingStarted.Lazily, false)
+    val isPlaying = state.map { it.isPlaying }.stateIn(viewModelScope, SharingStarted.Lazily, false)
+    val isMetronomeEnabled = state.map { it.isMetronomeEnabled }.stateIn(viewModelScope, SharingStarted.Lazily, false)
+    val metronomeVolume = state.map { it.metronomeVolume }.stateIn(viewModelScope, SharingStarted.Lazily, 1f)
+    val projectsDirectory = state.map { it.projectsDirectory }.stateIn(viewModelScope, SharingStarted.Lazily, null)
 
-    fun updateRecordingState(isRecordingNow: Boolean) {
-        isRecording.value = isRecordingNow
-    }
-    fun updatePlayingState(isPlayingNow: Boolean) {
-        isPlaying.value = isPlayingNow
-    }
-    fun updateMetronomeState(isMetronomeEnabledNow: Boolean) {
-        isMetronomeEnabled.value = isMetronomeEnabledNow
+    val audioEngine = MutableStateFlow<AudioEngine?>(null)
+
+    fun updateState(newState: AudioState) {
+        _state.value = newState
     }
 
     fun updateAudioEngineState(audioEngineNow: AudioEngine) {
         audioEngine.value = audioEngineNow
     }
 
+    fun setBpm(newBpm:Int) {
+        audioEngine.value?.metronome?.setBpm(newBpm)
+    }
+    fun setMetronomeVolume(newVolume:Float) {
+        audioEngine.value?.metronome?.setVolume(newVolume)
+    }
+    fun setProjectsDirectory(uri: Uri) {
+        audioEngine.value?.setProjectsDirectory(uri)
+    }
     fun switchRecording() {
         sendCommandToService(AudioService.ACTION_SWITCH_RECORDING)
     }
@@ -58,3 +69,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         ContextCompat.startForegroundService(getApplication(), intent)
     }
 }
+
+data class AudioState(
+    val isRecording: Boolean = false,
+    val isPlaying: Boolean = false,
+    val isMetronomeEnabled: Boolean = false,
+    val metronomeVolume: Float = 1f,
+    val projectsDirectory: Uri? = null
+)

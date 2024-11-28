@@ -4,11 +4,16 @@ import android.content.Context
 import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
+import android.net.Uri
+import android.provider.DocumentsContract
+import androidx.documentfile.provider.DocumentFile
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 
 object FileUtils {
+
+    //region Audio formats
     fun convertPcmToWav(pcmFile: File, wavFile: File, sampleRate : Int) {
         val pcmSize = pcmFile.length().toInt()
         val wavHeader = ByteArray(44)
@@ -174,4 +179,34 @@ object FileUtils {
             assetFileDescriptor.close()
         }
     }
+    //endregion
+
+    //region Files and folders
+    fun getExistingDirectoryNames(context: Context, uri: Uri): List<String> {
+        val documentFile = DocumentFile.fromTreeUri(context, uri) ?: return emptyList()
+        if (!documentFile.isDirectory) return emptyList()
+
+        return documentFile.listFiles()
+            .filter { it.isDirectory }
+            .mapNotNull { it.name }
+    }
+
+    fun generateUniqueName(existingNames: List<String>, baseName: String = "Untitled"): String {
+        var index = 1
+        var uniqueName: String
+        do {
+            uniqueName = "$baseName$index"
+            index++
+        } while (existingNames.contains(uniqueName))
+
+        return uniqueName
+    }
+
+    fun createSubdirectory(context: Context, uri: Uri, name: String): DocumentFile? {
+        val documentFile = DocumentFile.fromTreeUri(context, uri) ?: return null
+        if (!documentFile.isDirectory) return null
+
+        return documentFile.createDirectory(name)
+    }
+    //endregion
 }

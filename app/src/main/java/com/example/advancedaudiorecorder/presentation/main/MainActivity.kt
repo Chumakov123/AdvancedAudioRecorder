@@ -1,17 +1,14 @@
 package com.example.advancedaudiorecorder.presentation.main
 
-import android.app.Activity
 import android.content.ComponentName
 import android.content.Context
-import android.content.ContextWrapper
 import android.content.Intent
 import android.content.ServiceConnection
 import android.os.Bundle
 import android.os.IBinder
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.ActivityResult
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -19,24 +16,21 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
 import com.example.advancedaudiorecorder.service.AudioService
 import com.example.advancedaudiorecorder.ui.theme.AdvancedAudioRecorderTheme
 import kotlinx.coroutines.launch
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.test.platform.app.InstrumentationRegistry
-import com.example.advancedaudiorecorder.audio.AudioEngine
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import com.example.advancedaudiorecorder.presentation.screens.MainScreen
 import com.example.advancedaudiorecorder.utils.UiUtils
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flowOf
-import java.security.Permissions
-import kotlin.system.exitProcess
 
 class MainActivity : ComponentActivity() {
     private lateinit var permissionLauncher: ActivityResultLauncher<String>
@@ -45,39 +39,65 @@ class MainActivity : ComponentActivity() {
     private var audioService: AudioService? = null
     private var bound = false
 
+    private val dirRequest = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        uri?.let {
+            contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            Log.d("checkData", uri.path.toString())
+            mainViewModel.setProjectsDirectory(uri)
+        }
+    }
+
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
+            Log.d("checkData", "onServiceConnected")
             val localBinder = binder as AudioService.LocalBinder
             audioService = localBinder.getService()
             bound = true
 
             audioService?.let { service ->
-                val engine = service.audioEngine // Получаем AudioEngine из сервиса
-                mainViewModel.updateAudioEngineState(engine)  // Передаем в ViewModel
-            }
-
-            audioService?.permissionRequest?.observe(this@MainActivity) { permission ->
-                requestPermission(permission)
-            }
-            // Подписываемся на изменения состояния записи из сервиса
-            lifecycleScope.launch {
-                combine(
-                    audioService?.isRecording ?: flowOf(false),
-                    audioService?.isPlaying ?: flowOf(false),
-                    audioService?.isMetronomeEnabled ?: flowOf(false)
-                ) { isRecording, isPlaying, isMetronomeEnabled ->
-                    Triple(isRecording, isPlaying, isMetronomeEnabled)
-                }.collect { (isRecording, isPlaying, isMetronomeEnabled) ->
-                    mainViewModel.updateRecordingState(isRecording)
-                    mainViewModel.updatePlayingState(isPlaying)
-                    mainViewModel.updateMetronomeState(isMetronomeEnabled)
-                }
+                setupAudioServiceObservers(service)
             }
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
-            bound = false
+            Log.d("checkData", "onServiceDisconnected")
             audioService = null
+            bound = false
+        }
+    }
+
+    private fun setupAudioServiceObservers(service: AudioService) {
+        // Передача состояния AudioEngine в ViewModel
+        mainViewModel.updateAudioEngineState(service.audioEngine)
+
+        // Наблюдение за разрешениями
+        service.permissionRequest.observe(this@MainActivity) { permission ->
+            requestPermission(permission)
+        }
+
+        // Подписка на состояния из сервиса
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                service.audioEngine.run {
+                    combine(
+                        isRecording,
+                        isPlaying,
+                        isMetronomeEnabled,
+                        metronome.volume,
+                        projectsDirectory
+                    ) { isRecording, isPlaying, isMetronomeEnabled, metronomeVolume, projectsDirectory ->
+                        AudioState(
+                            isRecording,
+                            isPlaying,
+                            isMetronomeEnabled,
+                            metronomeVolume,
+                            projectsDirectory
+                        )
+                    }.collect { state ->
+                        mainViewModel.updateState(state)
+                    }
+                }
+            }
         }
     }
     override fun onStart() {
@@ -120,11 +140,16 @@ class MainActivity : ComponentActivity() {
                         onSwitchRecording = { mainViewModel.switchRecording() },
                         onSwitchPlaying = { mainViewModel.switchPlaying() },
                         onSwitchMetronome = { mainViewModel.switchMetronome() },
-                        isRecording = mainViewModel.isRecording.value,
-                        isPlaying = mainViewModel.isPlaying.value,
-                        isMetronomeEnabled = mainViewModel.isMetronomeEnabled.value,
-                        audioEngine = mainViewModel.audioEngine.value,
-                        onExitConfirmed = { exitApplication() }
+                        isRecording = mainViewModel.isRecording.collectAsState().value,
+                        isPlaying = mainViewModel.isPlaying.collectAsState().value,
+                        isMetronomeEnabled = mainViewModel.isMetronomeEnabled.collectAsState().value,
+                        audioEngine = mainViewModel.audioEngine.collectAsState().value,
+                        onExitConfirmed = { exitApplication() },
+                        onSetBpm = { newBpm -> mainViewModel.setBpm(newBpm) },
+                        metronomeVolume = mainViewModel.metronomeVolume.collectAsState().value,
+                        onVolumeChange = { newVolume -> mainViewModel.setMetronomeVolume(newVolume) },
+                        onFolderPick = {dirRequest.launch(null)},
+                        projectsDirectory = mainViewModel.projectsDirectory.collectAsState().value
                     )
                 }
             }
@@ -132,13 +157,14 @@ class MainActivity : ComponentActivity() {
     }
 
     fun exitApplication() {
+        val stopIntent = Intent(this, AudioService::class.java)
+        this.stopService(stopIntent)
+
         mainViewModel.stopService()
-        //val intent = Intent(context, AudioService::class.java)
-        //context.stopService(intent)
 
         // Закрытие приложения
         this.finish()
-        exitProcess(0) // Завершение процесса приложения
+        //exitProcess(0) // Завершение процесса приложения
     }
 
     fun requestPermission(permission : String) {
@@ -165,6 +191,11 @@ fun MainScreenPreview() {
         isRecording = false,
         isPlaying = false,
         isMetronomeEnabled = false,
-        audioEngine = null
+        audioEngine = null,
+        onSetBpm = {},
+        metronomeVolume = 1f,
+        onVolumeChange = {},
+        onFolderPick =  {},
+        projectsDirectory = null
     )
 }

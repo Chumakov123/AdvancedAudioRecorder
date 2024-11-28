@@ -30,7 +30,7 @@ import androidx.compose.ui.unit.dp
 import com.example.advancedaudiorecorder.R
 
 @Composable
-fun TopBar(onExitConfirmed: () -> Unit) {
+fun TopBar(onExitConfirmed: () -> Unit, bpm: Int, onChangeTempo: (Int) -> Unit) {
     var showExitDialog by remember { mutableStateOf(false) } // Управление видимостью диалога
     Box(
         modifier = Modifier
@@ -98,7 +98,7 @@ fun TopBar(onExitConfirmed: () -> Unit) {
             MusicalTimePickerButton()
         }
 
-        BpmControlPanel(120, { }, { })
+        BpmControlPanel(bpm, onChangeTempo)
 
         Row(
             modifier = Modifier
@@ -138,6 +138,8 @@ fun TopBar(onExitConfirmed: () -> Unit) {
 @Composable
 fun TopBarPreview() {
     TopBar (
-        onExitConfirmed = {}
+        bpm = 120,
+        onExitConfirmed = {},
+        onChangeTempo = {}
     )
 }
