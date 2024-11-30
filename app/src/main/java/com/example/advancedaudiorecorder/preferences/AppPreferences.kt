@@ -13,11 +13,20 @@ class AppPreferences(private val context: Context) {
         get() = sharedPreferences.getString("lastOpenedProject", null)
         set(value) = sharedPreferences.edit().putString("lastOpenedProject", value).apply()
 
+    var lastOpenedProjectFolder: Uri?
+        get() {
+            val uriString = sharedPreferences.getString("lastOpenedProjectFolder", null)
+            return uriString?.let { Uri.parse(it) } // Возвращаем Uri только если строка не null
+        }
+        set(value) {
+            sharedPreferences.edit().putString("lastOpenedProjectFolder", value?.toString()).apply()
+        }
+
     var projectsDirectory: Uri
         get() {
             val uriString = sharedPreferences.getString(
                 "projectsDirectory",
-                context.getExternalFilesDir(Environment.DIRECTORY_MUSIC)?.toString()
+                context.getExternalFilesDir(Environment.DIRECTORY_MUSIC)?.toURI().toString()
             )
             return Uri.parse(uriString)
         }
@@ -26,6 +35,10 @@ class AppPreferences(private val context: Context) {
         }
 
     var metronomeVolume: Float
-        get() = sharedPreferences.getFloat("metronomeVolume", 1.0f) // Default volume is 50%
+        get() = sharedPreferences.getFloat("metronomeVolume", 0.5f)
         set(value) = sharedPreferences.edit().putFloat("metronomeVolume", value).apply()
+
+    fun clearPreferences() {
+        sharedPreferences.edit().clear().apply()
+    }
 }

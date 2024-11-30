@@ -5,8 +5,9 @@ import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.net.Uri
-import android.provider.DocumentsContract
+import android.util.Log
 import androidx.documentfile.provider.DocumentFile
+import kotlinx.serialization.json.Json
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -183,16 +184,34 @@ object FileUtils {
 
     //region Files and folders
     fun getExistingDirectoryNames(context: Context, uri: Uri): List<String> {
-        val documentFile = DocumentFile.fromTreeUri(context, uri) ?: return emptyList()
-        if (!documentFile.isDirectory) return emptyList()
+        return when (uri.scheme) {
+            "content" -> {
+                // Работаем с Tree URI через SAF
+                val documentFile = DocumentFile.fromTreeUri(context, uri) ?: return emptyList()
+                if (!documentFile.isDirectory) return emptyList()
 
-        return documentFile.listFiles()
-            .filter { it.isDirectory }
-            .mapNotNull { it.name }
+                documentFile.listFiles()
+                    .filter { it.isDirectory }
+                    .mapNotNull { it.name }
+            }
+            "file" -> {
+                // Работаем с обычным файловым URI
+                val file = File(uri.path ?: return emptyList())
+                if (!file.isDirectory) return emptyList()
+
+                file.listFiles()
+                    ?.filter { it.isDirectory }
+                    ?.mapNotNull { it.name }
+                    ?: emptyList()
+            }
+            else -> {
+                emptyList() // Неизвестный URI
+            }
+        }
     }
 
     fun generateUniqueName(existingNames: List<String>, baseName: String = "Untitled"): String {
-        var index = 1
+        var index = 0
         var uniqueName: String
         do {
             uniqueName = "$baseName$index"
@@ -203,10 +222,73 @@ object FileUtils {
     }
 
     fun createSubdirectory(context: Context, uri: Uri, name: String): DocumentFile? {
-        val documentFile = DocumentFile.fromTreeUri(context, uri) ?: return null
-        if (!documentFile.isDirectory) return null
+        return when (uri.scheme) {
+            "content" -> {
+                // Работаем с Tree URI через SAF
+                val documentFile = DocumentFile.fromTreeUri(context, uri) ?: return null
+                if (!documentFile.isDirectory) return null
 
-        return documentFile.createDirectory(name)
+                documentFile.createDirectory(name)
+            }
+            "file" -> {
+                // Работаем с обычным файловым URI
+                val file = File(uri.path ?: return null)
+                if (!file.isDirectory) return null
+
+                val newDirectory = File(file, name)
+                return if (newDirectory.mkdir()) {
+                    DocumentFile.fromFile(newDirectory) // Создаём DocumentFile для локального файла
+                } else {
+                    null // Не удалось создать директорию
+                }
+            }
+            else -> {
+                null // Неизвестная схема URI
+            }
+        }
+    }
+
+    fun getDirectoryFromUri(context: Context, uri: Uri): DocumentFile? {
+        return when (uri.scheme) {
+            "content" -> {
+                // Работаем с Tree URI через SAF
+                val documentFile = DocumentFile.fromTreeUri(context, uri) ?: return null
+                if (!documentFile.isDirectory) return null
+                documentFile
+            }
+            "file" -> {
+                // Работаем с обычным файловым URI
+                val file = File(uri.path ?: return null)
+                if (!file.isDirectory) return null
+                DocumentFile.fromFile(file)
+            }
+            else -> {
+                null // Неизвестная схема URI
+            }
+        }
+    }
+
+    fun searchFile(context: Context, directory: DocumentFile, fileName: String): DocumentFile? {
+        return if (directory.uri.scheme == "content") {
+            directory.listFiles().find { file -> file.name == fileName }
+        } else {
+            val folderPath = File(directory.uri.path ?: return null)
+            val filePath = File(folderPath, fileName)
+            if (filePath.exists()) DocumentFile.fromFile(filePath) else null
+        }
+    }
+
+    inline fun <reified T> readJson(context: Context, jsonFile: DocumentFile): T? {
+        return try {
+            context.contentResolver.openInputStream(jsonFile.uri)?.use { inputStream ->
+                val jsonString = inputStream.bufferedReader().use { it.readText() }
+                Json.decodeFromString(jsonString)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Log.e("checkData", "Ошибка при чтении JSON: ${e.message}")
+            null
+        }
     }
     //endregion
 }

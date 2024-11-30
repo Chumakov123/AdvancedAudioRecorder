@@ -7,5 +7,6 @@ data class ProjectData(
     val name: String,
     val isMetronomeEnabled: Boolean,
     val bpm: Int,
-    val tracks: List<TrackData>
+    val tracks: List<TrackData>,
+    val selectedTrackIndex: Int
 )

@@ -1,6 +1,8 @@
 package com.example.advancedaudiorecorder.utils
 
+import android.content.Context
 import android.util.Log
+import android.widget.Toast
 import java.io.File
 
 object LogUtils {
@@ -30,5 +32,11 @@ object LogUtils {
         } else {
             Log.e("PCMData", "PCM файл не найден")
         }
+    }
+
+    fun showError(context: Context, message: String, exception: Exception) {
+        exception.printStackTrace()
+        Toast.makeText(context, "$message: ${exception.message}", Toast.LENGTH_LONG).show()
+        Log.e("checkData", "$message: ${exception.message}", exception)
     }
 }

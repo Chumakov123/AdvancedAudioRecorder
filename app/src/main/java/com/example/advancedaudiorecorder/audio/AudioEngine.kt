@@ -10,12 +10,10 @@ import androidx.documentfile.provider.DocumentFile
 import com.example.advancedaudiorecorder.model.ProjectData
 import com.example.advancedaudiorecorder.model.TrackData
 import com.example.advancedaudiorecorder.preferences.AppPreferences
+import com.example.advancedaudiorecorder.project.ProjectManager
 import com.example.advancedaudiorecorder.utils.FileUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
-import java.io.InputStreamReader
 
 @OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
 class AudioEngine (
@@ -49,23 +47,36 @@ class AudioEngine (
     private val _projectsDirectory = MutableStateFlow(appPreferences.projectsDirectory)
     val projectsDirectory: StateFlow<Uri> = _projectsDirectory
 
-    private val _projectName = MutableStateFlow(appPreferences.lastOpenedProject)
-    val projectName: StateFlow<String?> = _projectName
+    private val _currentProjectFolder = MutableStateFlow(appPreferences.lastOpenedProjectFolder)
+    val currentProjectFolder: StateFlow<Uri?> = _currentProjectFolder
+
+    private val _currentProjectName = MutableStateFlow(appPreferences.lastOpenedProject)
+    val currentProjectName: StateFlow<String?> = _currentProjectName
+
+    private val projectManager = ProjectManager(context)
 
     init {
-        if (_projectName.value != null) {
-            loadProject(_projectName.value.toString())
+        if (_currentProjectFolder.value != null) {
+            val projectData = projectManager.loadProject(_currentProjectFolder.value!!)
+            projectData?.let {
+                loadProjectData(projectData)
+                Toast.makeText(context, "Проект ${projectData.name} загружен", Toast.LENGTH_SHORT).show()
+            }
         }
         else {
-            createProject()
+            initializeDefaultProject()
+
+            val projectFolder = createUniqueSubdirectory(context, _projectsDirectory.value)
+            projectFolder?.let {
+                _currentProjectName.value = projectFolder.name
+                _currentProjectFolder.value = projectFolder.uri
+
+                projectManager.saveProject(projectFolder, getProjectData())
+                Toast.makeText(context, "Проект ${projectFolder.name} создан", Toast.LENGTH_SHORT).show()
+            }
+
         }
         metronome.setVolume(appPreferences.metronomeVolume)
-    }
-
-    fun createUniqueSubdirectory(context: Context, uri: Uri): DocumentFile? {
-        val existingNames = FileUtils.getExistingDirectoryNames(context, uri)
-        val uniqueName = FileUtils.generateUniqueName(existingNames)
-        return FileUtils.createSubdirectory(context, uri, uniqueName)
     }
 
     fun setProjectsDirectory(uri: Uri) {
@@ -184,111 +195,89 @@ class AudioEngine (
         if (isRecording.value) stopRecording()
         if (isPlaying.value) stopPlayback()
         tracks.forEach { it.release() }
-        savePreferences()
+        //savePreferences()
         metronome.release()
     }
 
-    //TODO следующие методы вынести в класс ProjectManager
-    fun createProject() {
-        try {
-            val projectFolder = createUniqueSubdirectory(context, _projectsDirectory.value)
-                ?: throw IllegalStateException("Не удалось создать директорию проекта")
+    private fun initializeDefaultProject() {
+        repeat(2) { addTrack() }
+        _isMetronomeEnabled.value = true
+        metronome.setBpm(120)
+    }
 
-            _projectName.value = projectFolder.name
-            repeat(2) { addTrack() }
+    //region ProjectData
+    private fun getProjectData(): ProjectData {
+        val projectName = _currentProjectName.value
+            ?: throw IllegalStateException("Отсутствует название проекта")
 
-            val project = ProjectData(
-                name = _projectName.value
-                    ?: throw IllegalStateException("Отсутствует название проекта"),
-                isMetronomeEnabled = _isMetronomeEnabled.value,
-                bpm = metronome.bpm.value,
-                tracks = tracks.map { track ->
-                    TrackData(
-                        id = track.id,
-                        isEnabled = track.isEnabled,
-                        isLooping = track.isLooping,
-                        volume = track.volume,
-                        pitch = track.pitch,
-                        speed = track.speed
-                    )
-                }
-            )
-            val json = Json.encodeToString(project)
-            val jsonFile = projectFolder.createFile("application/json", "${projectFolder.name}.json")
-                ?: throw IllegalStateException("Не удалось создать JSON-файл")
+        return ProjectData(
+            name = projectName,
+            isMetronomeEnabled = _isMetronomeEnabled.value,
+            bpm = metronome.bpm.value,
+            tracks = tracks.map { track ->
+                TrackData(
+                    id = track.id,
+                    isEnabled = track.isEnabled,
+                    isLooping = track.isLooping,
+                    volume = track.volume,
+                    pitch = track.pitch,
+                    speed = track.speed
+                )
+            },
+            selectedTrackIndex = _selectedTrackIndex.value
+        )
+    }
+     private fun loadProjectData(project: ProjectData) {
+        _currentProjectName.value = project.name
+        _isMetronomeEnabled.value = project.isMetronomeEnabled
 
-            context.contentResolver.openOutputStream(jsonFile.uri)?.use { outputStream ->
-                outputStream.write(json.toByteArray())
+        // Остановка записи и воспроизведения
+        //TODO останавливать запись и проигрывание
+        //stopRecording()
+        //stopPlayback()
+        metronome.stop()
+
+        // Установка BPM
+        metronome.setBpm(project.bpm)
+
+        // Инициализация треков
+        tracks.clear()
+        tracks.addAll(project.tracks.map { trackData ->
+            Track(
+                id = trackData.id,
+                context = context,
+                onPlaybackComplete = ::onPlaybackComplete,
+                onPlaybackReady = ::onPlaybackReady
+            ).apply {
+                isEnabled = trackData.isEnabled
+                isLooping = trackData.isLooping
+                volume = trackData.volume
+                pitch = trackData.pitch
+                speed = trackData.speed
             }
+        })
+         _selectedTrackIndex.value = project.selectedTrackIndex
+    }
+    //endregion
 
-            Toast.makeText(context, "Проект ${projectFolder.name} создан",Toast.LENGTH_SHORT).show()
+    private fun saveProject() {
+        _currentProjectFolder.value?.let {
+            projectManager.saveProject(it, getProjectData())
+            Toast.makeText(context, "Проект ${_currentProjectName.value} сохранен", Toast.LENGTH_SHORT).show()
         }
-        catch (e: Exception) {
-            e.printStackTrace()
-            Toast.makeText(context, "Ошибка при создании проекта: ${e.message}", Toast.LENGTH_SHORT).show()
-        }
     }
-    fun deleteProject(title: String) {
-        //TODO удаление проекта
-        // Нужна ли эта функция?
-    }
-    fun renameProject(title: String, newTitle: String) {
-        //TODO переименование существующего проекта
-        // Нужна ли эта функция?
-    }
-    fun loadProject(title: String) {
-        val documentFile = DocumentFile.fromTreeUri(context, _projectsDirectory.value)
-        val projectFolder = documentFile?.listFiles()?.find { it.name == title }
-        projectFolder?.let {
-            val jsonFile = it.listFiles().find { file -> file.name == "${projectFolder.name}.json" }
-            jsonFile?.let { file ->
-                context.contentResolver.openInputStream(file.uri)?.use { inputStream ->
-                    val reader = InputStreamReader(inputStream)
-                    val jsonString = reader.readText()
 
-                    // Десериализуем JSON в объект ProjectData
-                    try {
-                        val project = Json.decodeFromString<ProjectData>(jsonString)
+    private fun createUniqueSubdirectory(context: Context, uri: Uri): DocumentFile? {
+        val existingNames = FileUtils.getExistingDirectoryNames(context, uri)
+        val uniqueName = FileUtils.generateUniqueName(existingNames)
+        return FileUtils.createSubdirectory(context, uri, uniqueName)
+    }
 
-                        _projectName.value = project.name
-                        _isMetronomeEnabled.value = project.isMetronomeEnabled
-                        metronome.stop()
-                        stopRecording()
-                        stopPlayback()
-                        metronome.setBpm(project.bpm)
-                        tracks.clear()
-                        tracks.addAll(project.tracks.map { trackData ->
-                            Track(
-                                id = trackData.id,
-                                context = context,
-                                onPlaybackComplete = ::onPlaybackComplete,
-                                onPlaybackReady = ::onPlaybackReady
-                            ).apply {
-                                isEnabled = trackData.isEnabled
-                                isLooping = trackData.isLooping
-                                volume = trackData.volume
-                                pitch = trackData.pitch
-                                speed = trackData.speed
-                            }
-                        })
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                        null
-                    }
-                }
-            }
-        }
-        Toast.makeText(context, "Проект $title открыт",Toast.LENGTH_SHORT).show()
-        //TODO загрузка проекта из json
-        //TODO навести порядок
-    }
-    fun saveProject(title: String) {
-        Toast.makeText(context, "Проект $title сохранен",Toast.LENGTH_SHORT).show()
-        //TODO сохранение проекта в json
-    }
     fun savePreferences() {
         appPreferences.metronomeVolume = metronome.volume.value
         appPreferences.projectsDirectory = _projectsDirectory.value
-        appPreferences.lastOpenedProject = _projectName.value
+        appPreferences.lastOpenedProject = _currentProjectName.value
+        appPreferences.lastOpenedProjectFolder = _currentProjectFolder.value
+        saveProject()
     }
 }
