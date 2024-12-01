@@ -12,19 +12,24 @@ import kotlinx.serialization.json.Json
 class ProjectManager(
     private val context: Context
 ) {
-
+    private val projectFileName = "project"
     //region Project operations
     fun saveProject(projectFolder: DocumentFile, project: ProjectData) {
         try {
             val json = Json.encodeToString(project)
-            val jsonFile = projectFolder.createFile("application/json", "${projectFolder.name}")
+
+            // Если файл уже существует, удаляем его
+            projectFolder.findFile("$projectFileName.json")?.delete()
+
+            // Создаем новый файл
+            val jsonFile = projectFolder.createFile("application/json", projectFileName)
                 ?: throw IllegalStateException("Не удалось создать JSON-файл")
 
+            // Записываем данные в файл
             context.contentResolver.openOutputStream(jsonFile.uri)?.use { outputStream ->
                 outputStream.write(json.toByteArray())
             }
-        }
-        catch (e: Exception) {
+        } catch (e: Exception) {
             LogUtils.showError(context, "Ошибка при создании проекта: ${e.message}", e)
         }
     }
@@ -48,7 +53,7 @@ class ProjectManager(
             val projectFolder = FileUtils.getDirectoryFromUri(context, uri)
                 ?: throw IllegalStateException("Не удалось получить директорию проекта")
 
-            val jsonFile = FileUtils.searchFile(context, projectFolder, "${projectFolder.name}.json")
+            val jsonFile = FileUtils.searchFile(context, projectFolder, "$projectFileName.json")
                 ?: throw IllegalStateException("JSON-файл проекта не найден")
 
             val project = FileUtils.readJson<ProjectData>(context, jsonFile)

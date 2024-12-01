@@ -43,7 +43,7 @@ class MainActivity : ComponentActivity() {
         uri?.let {
             contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
             Log.d("checkData", uri.path.toString())
-            mainViewModel.setProjectsDirectory(uri)
+            mainViewModel.setProjectsDirectory(this, uri, true)
         }
     }
 

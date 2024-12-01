@@ -24,6 +24,7 @@ class AudioEngine (
         IDLE, PREPARE_RECORD, PREPARE_PLAYBACK, RECORD, PLAYBACK
     }
 
+    //region Variables
     private var audioRecorder: AudioRecorder = AudioRecorder(context)
     var metronome: Metronome = Metronome(context)
 
@@ -54,13 +55,14 @@ class AudioEngine (
     val currentProjectName: StateFlow<String?> = _currentProjectName
 
     private val projectManager = ProjectManager(context)
+    //endregion
 
     init {
         if (_currentProjectFolder.value != null) {
             val projectData = projectManager.loadProject(_currentProjectFolder.value!!)
             projectData?.let {
                 loadProjectData(projectData)
-                Toast.makeText(context, "Проект ${projectData.name} загружен", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Проект ${getProjectName()} загружен", Toast.LENGTH_SHORT).show()
             }
         }
         else {
@@ -72,17 +74,33 @@ class AudioEngine (
                 _currentProjectFolder.value = projectFolder.uri
 
                 projectManager.saveProject(projectFolder, getProjectData())
-                Toast.makeText(context, "Проект ${projectFolder.name} создан", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Проект ${getProjectName()} создан", Toast.LENGTH_SHORT).show()
             }
 
         }
         metronome.setVolume(appPreferences.metronomeVolume)
     }
 
-    fun setProjectsDirectory(uri: Uri) {
+    fun changeProjectsDirectory(context: Context, uri: Uri, moveFromOldDirectory: Boolean = false) {
+        val newDirectory = FileUtils.getDirectoryFromUri(context, uri) ?: throw IllegalArgumentException("Invalid URI")
+        val oldDirectory = _projectsDirectory.value.let { FileUtils.getDirectoryFromUri(context, it) }
+
+        if (!moveFromOldDirectory || oldDirectory == null || oldDirectory.uri == newDirectory.uri) {
+            _projectsDirectory.value = uri
+            return
+        }
+
+        _currentProjectFolder.value?.let {
+            if ( FileUtils.isSubDirectory(parentUri = _projectsDirectory.value, childUri = it) ) {
+                _currentProjectFolder.value = FileUtils.getDirectoryFromUri(context, it)
+                    ?.let { it1 -> FileUtils.moveFile(context, it1, newDirectory).uri }
+            }
+        }
+        FileUtils.moveFiles(context, oldDirectory, newDirectory)
         _projectsDirectory.value = uri
     }
 
+    //region Tracks
     fun addTrack() {
         val track = Track(tracks.count(), context, ::onPlaybackComplete, ::onPlaybackReady)
         tracks.add(track)
@@ -99,6 +117,7 @@ class AudioEngine (
         if (tracks.count() > index && index >= 0)
             _selectedTrackIndex.value = index
     }
+    //endregion
 
     fun onPlaybackComplete() {
         Log.d("checkData", "onPlaybackComplete()")
@@ -137,6 +156,7 @@ class AudioEngine (
         }
     }
 
+    //region Recording
     fun startRecording() : Boolean {
         if (!audioRecorder.checkPermission()) return false
         Log.d("checkData", "startRecording()")
@@ -155,7 +175,9 @@ class AudioEngine (
         if (metronome.isRunning)
             metronome.stop()
     }
+    //endregion
 
+    //region Playback
     fun startPlayback(): Boolean {
         mode = Mode.PREPARE_PLAYBACK
         tracks.forEach { it.preparePlaybackIfEnabled() }
@@ -169,6 +191,8 @@ class AudioEngine (
         if (metronome.isRunning)
             metronome.stop()
     }
+    //endregion
+
 
     private fun allReady(excludeSelected : Boolean = false) : Boolean {
         return tracks.all {it.isReady() || (excludeSelected && it.id == _selectedTrackIndex.value)}
@@ -263,8 +287,12 @@ class AudioEngine (
     private fun saveProject() {
         _currentProjectFolder.value?.let {
             projectManager.saveProject(it, getProjectData())
-            Toast.makeText(context, "Проект ${_currentProjectName.value} сохранен", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Проект ${getProjectName()} сохранен", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private fun getProjectName() : String? {
+        return _currentProjectFolder.value?.path?.split("/")?.last()
     }
 
     private fun createUniqueSubdirectory(context: Context, uri: Uri): DocumentFile? {

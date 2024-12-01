@@ -11,6 +11,8 @@ import kotlinx.serialization.json.Json
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.io.InputStream
+import java.io.OutputStream
 
 object FileUtils {
 
@@ -289,6 +291,145 @@ object FileUtils {
             Log.e("checkData", "Ошибка при чтении JSON: ${e.message}")
             null
         }
+    }
+
+     fun copyFiles(context: Context, from: DocumentFile, to: DocumentFile) {
+        if (directoriesAreSame(from, to)) return
+        if (!to.isDirectory || !to.canWrite()) {
+            throw IllegalArgumentException("Destination is not a writable directory")
+        }
+
+        for (file in from.listFiles()) {
+            if (file.isFile) {
+                val destFile = to.createFile(file.type ?: "application/octet-stream", file.name ?: "unknown")
+                if (destFile != null) {
+                    file.uri.openInputStream(context)?.use { input ->
+                        destFile.uri.openOutputStream(context)?.use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                }
+            } else if (file.isDirectory) {
+                val subDir = to.createDirectory(file.name ?: "unknown") ?: continue
+                copyFiles(context, file, subDir)
+            }
+        }
+    }
+
+    fun moveFiles(context: Context, from: DocumentFile, to: DocumentFile) {
+        if (directoriesAreSame(from, to)) return
+
+        if (!to.isDirectory || !to.canWrite()) {
+            throw IllegalArgumentException("Destination is not a writable directory")
+        }
+
+        for (file in from.listFiles()) {
+            if (file.isFile) {
+                val destFile = to.createFile(file.type ?: "application/octet-stream", file.name ?: "unknown")
+                if (destFile != null) {
+                    file.uri.openInputStream(context)?.use { input ->
+                        destFile.uri.openOutputStream(context)?.use { output ->
+                            input.copyTo(output)
+                            file.delete() // Удаляем файл только после успешного копирования
+                        }
+                    }
+                }
+            } else if (file.isDirectory) {
+                val subDir = to.createDirectory(file.name ?: "unknown") ?: continue
+                moveFiles(context, file, subDir)
+                file.delete() // Удаляем папку только после успешного копирования всех её файлов
+            }
+        }
+    }
+
+    fun moveFile(context: Context, file: DocumentFile, destinationFolder: DocumentFile): DocumentFile {
+        if (!destinationFolder.isDirectory || !destinationFolder.canWrite()) {
+            throw IllegalArgumentException("Destination is not a writable directory")
+        }
+
+        val newFileName = generateUniqueFileName(destinationFolder, file.name ?: "unknown")
+
+        return if (file.isFile) {
+            val destFile = destinationFolder.createFile(file.type ?: "application/octet-stream", newFileName)
+                ?: throw IllegalStateException("Failed to create destination file")
+
+            file.uri.openInputStream(context)?.use { input ->
+                destFile.uri.openOutputStream(context)?.use { output ->
+                    input.copyTo(output)
+                }
+            }
+
+            if (!file.delete()) {
+                throw IllegalStateException("Failed to delete source file")
+            }
+
+            destFile
+        } else if (file.isDirectory) {
+            val existingDir = destinationFolder.findFile(file.name ?: "unknown")
+
+            val destDir = if (existingDir != null && existingDir.isDirectory && existingDir.listFiles().isEmpty()) {
+                existingDir // Используем существующую пустую директорию
+            } else {
+                destinationFolder.createDirectory(newFileName)
+                    ?: throw IllegalStateException("Failed to create destination directory")
+            }
+
+            for (subFile in file.listFiles()) {
+                moveFile(context, subFile, destDir)
+            }
+
+            if (!file.delete()) {
+                throw IllegalStateException("Failed to delete source directory")
+            }
+
+            destDir
+        } else {
+            throw IllegalArgumentException("Source is neither a file nor a directory")
+        }
+    }
+
+    fun isSubDirectory(parentUri: Uri, childUri: Uri): Boolean {
+        val parentPath = parentUri.path ?: return false
+        val childPath = childUri.path ?: return false
+
+        // Проверяем, начинается ли путь ребенка с пути родителя
+        return childPath.startsWith(parentPath)
+    }
+
+    private fun generateUniqueFileName(folder: DocumentFile, baseName: String): String {
+        var uniqueName = baseName
+        var counter = 1
+
+        // Проверяем, существует ли файл или папка с таким именем
+        while (folder.findFile(uniqueName) != null) {
+            val dotIndex = baseName.lastIndexOf('.')
+            uniqueName = if (dotIndex != -1) {
+                val nameWithoutExtension = baseName.substring(0, dotIndex)
+                val extension = baseName.substring(dotIndex)
+                "$nameWithoutExtension ($counter)$extension"
+            } else {
+                "$baseName ($counter)"
+            }
+            counter++
+        }
+
+        return uniqueName
+    }
+
+    fun directoriesAreSame(dir1: DocumentFile, dir2: DocumentFile): Boolean {
+        return dir1.uri == dir2.uri || (dir1.name == dir2.name && dir1.length() == dir2.length() && dir1.lastModified() == dir2.lastModified())
+    }
+
+    private fun Uri.openInputStream(context: Context): InputStream? = try {
+        context.contentResolver.openInputStream(this)
+    } catch (e: Exception) {
+        null
+    }
+
+    private fun Uri.openOutputStream(context: Context): OutputStream? = try {
+        context.contentResolver.openOutputStream(this)
+    } catch (e: Exception) {
+        null
     }
     //endregion
 }

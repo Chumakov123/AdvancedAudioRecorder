@@ -1,6 +1,7 @@
 package com.example.advancedaudiorecorder.presentation.main
 
 import android.app.Application
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.core.content.ContextCompat
@@ -41,8 +42,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setMetronomeVolume(newVolume:Float) {
         audioEngine.value?.metronome?.setVolume(newVolume)
     }
-    fun setProjectsDirectory(uri: Uri) {
-        audioEngine.value?.setProjectsDirectory(uri)
+    fun setProjectsDirectory(context: Context, uri: Uri, moveFromOldDirectory: Boolean) {
+        audioEngine.value?.changeProjectsDirectory(context, uri, moveFromOldDirectory)
     }
     fun switchRecording() {
         sendCommandToService(AudioService.ACTION_SWITCH_RECORDING)
