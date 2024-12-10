@@ -5,31 +5,40 @@ import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.net.Uri
+import android.provider.DocumentsContract
 import android.util.Log
 import androidx.documentfile.provider.DocumentFile
 import kotlinx.serialization.json.Json
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 
 object FileUtils {
 
     //region Audio formats
-    fun convertPcmToWav(pcmFile: File, wavFile: File, sampleRate : Int) {
-        val pcmSize = pcmFile.length().toInt()
+    fun convertPcmToWav(pcmFile: File, wavFile: File, sampleRate: Int) {
+        FileInputStream(pcmFile).use { pcmInputStream ->
+            FileOutputStream(wavFile).use { wavOutputStream ->
+                convertPcmToWav(pcmInputStream, wavOutputStream, sampleRate)
+            }
+        }
+    }
+    fun convertPcmToWav(inputStream: InputStream, outputStream: OutputStream, sampleRate: Int) {
+        val pcmData = inputStream.available()
         val wavHeader = ByteArray(44)
 
-        // Заголовок WAV файла
+        // Создание заголовка WAV
         wavHeader[0] = 'R'.code.toByte()
         wavHeader[1] = 'I'.code.toByte()
         wavHeader[2] = 'F'.code.toByte()
         wavHeader[3] = 'F'.code.toByte()
-        wavHeader[4] = (pcmSize + 36).toByte()
-        wavHeader[5] = ((pcmSize + 36) shr 8).toByte()
-        wavHeader[6] = ((pcmSize + 36) shr 16).toByte()
-        wavHeader[7] = ((pcmSize + 36) shr 24).toByte()
+        wavHeader[4] = (pcmData + 36).toByte()
+        wavHeader[5] = ((pcmData + 36) shr 8).toByte()
+        wavHeader[6] = ((pcmData + 36) shr 16).toByte()
+        wavHeader[7] = ((pcmData + 36) shr 24).toByte()
         wavHeader[8] = 'W'.code.toByte()
         wavHeader[9] = 'A'.code.toByte()
         wavHeader[10] = 'V'.code.toByte()
@@ -39,24 +48,38 @@ object FileUtils {
         wavHeader[14] = 't'.code.toByte()
         wavHeader[15] = ' '.code.toByte()
         wavHeader[16] = 16
+        wavHeader[17] = 0
+        wavHeader[18] = 0
+        wavHeader[19] = 0
         wavHeader[20] = 1
+        wavHeader[21] = 0
         wavHeader[22] = 1
+        wavHeader[23] = 0
         wavHeader[24] = (sampleRate and 0xff).toByte()
         wavHeader[25] = ((sampleRate shr 8) and 0xff).toByte()
+        wavHeader[26] = ((sampleRate shr 16) and 0xff).toByte()
+        wavHeader[27] = ((sampleRate shr 24) and 0xff).toByte()
+        wavHeader[28] = (sampleRate * 2 and 0xff).toByte()
+        wavHeader[29] = ((sampleRate * 2 shr 8) and 0xff).toByte()
+        wavHeader[30] = ((sampleRate * 2 shr 16) and 0xff).toByte()
+        wavHeader[31] = ((sampleRate * 2 shr 24) and 0xff).toByte()
         wavHeader[32] = 2
+        wavHeader[33] = 0
         wavHeader[34] = 16
+        wavHeader[35] = 0
         wavHeader[36] = 'd'.code.toByte()
         wavHeader[37] = 'a'.code.toByte()
         wavHeader[38] = 't'.code.toByte()
         wavHeader[39] = 'a'.code.toByte()
-        wavHeader[40] = pcmSize.toByte()
-        wavHeader[41] = (pcmSize shr 8).toByte()
-        wavHeader[42] = (pcmSize shr 16).toByte()
-        wavHeader[43] = (pcmSize shr 24).toByte()
+        wavHeader[40] = (pcmData and 0xff).toByte()
+        wavHeader[41] = ((pcmData shr 8) and 0xff).toByte()
+        wavHeader[42] = ((pcmData shr 16) and 0xff).toByte()
+        wavHeader[43] = ((pcmData shr 24) and 0xff).toByte()
 
-        FileOutputStream(wavFile).use { output ->
+        // Запись заголовка и данных
+        outputStream.use { output ->
             output.write(wavHeader)
-            FileInputStream(pcmFile).use { input ->
+            inputStream.use { input ->
                 input.copyTo(output)
             }
         }
@@ -250,8 +273,8 @@ object FileUtils {
         }
     }
 
-    fun getDirectoryFromUri(context: Context, uri: Uri): DocumentFile? {
-        return when (uri.scheme) {
+    fun getDirectory(context: Context, uri: Uri?): DocumentFile? {
+        return when (uri?.scheme) {
             "content" -> {
                 // Работаем с Tree URI через SAF
                 val documentFile = DocumentFile.fromTreeUri(context, uri) ?: return null
@@ -269,16 +292,20 @@ object FileUtils {
             }
         }
     }
-
-    fun searchFile(context: Context, directory: DocumentFile, fileName: String): DocumentFile? {
-        return if (directory.uri.scheme == "content") {
-            directory.listFiles().find { file -> file.name == fileName }
-        } else {
-            val folderPath = File(directory.uri.path ?: return null)
-            val filePath = File(folderPath, fileName)
-            if (filePath.exists()) DocumentFile.fromFile(filePath) else null
-        }
+    fun findFileInDirectory(directory: DocumentFile?, fileName: String): DocumentFile? {
+        if (directory == null || !directory.isDirectory) return null
+        //return directory.listFiles().firstOrNull { it.name == fileName && it.isFile }
+        return directory.findFile(fileName)
     }
+//    fun searchFile(directory: DocumentFile, fileName: String): DocumentFile? {
+//        return if (directory.uri.scheme == "content") {
+//            directory.listFiles().find { file -> file.name == fileName }
+//        } else {
+//            val folderPath = File(directory.uri.path ?: return null)
+//            val filePath = File(folderPath, fileName)
+//            if (filePath.exists()) DocumentFile.fromFile(filePath) else null
+//        }
+//    }
 
     inline fun <reified T> readJson(context: Context, jsonFile: DocumentFile): T? {
         return try {
@@ -293,30 +320,8 @@ object FileUtils {
         }
     }
 
-     fun copyFiles(context: Context, from: DocumentFile, to: DocumentFile) {
-        if (directoriesAreSame(from, to)) return
-        if (!to.isDirectory || !to.canWrite()) {
-            throw IllegalArgumentException("Destination is not a writable directory")
-        }
-
-        for (file in from.listFiles()) {
-            if (file.isFile) {
-                val destFile = to.createFile(file.type ?: "application/octet-stream", file.name ?: "unknown")
-                if (destFile != null) {
-                    file.uri.openInputStream(context)?.use { input ->
-                        destFile.uri.openOutputStream(context)?.use { output ->
-                            input.copyTo(output)
-                        }
-                    }
-                }
-            } else if (file.isDirectory) {
-                val subDir = to.createDirectory(file.name ?: "unknown") ?: continue
-                copyFiles(context, file, subDir)
-            }
-        }
-    }
-
-    fun moveFiles(context: Context, from: DocumentFile, to: DocumentFile) {
+    fun moveFiles(context: Context, from: DocumentFile?, to: DocumentFile?) {
+        if (from == null || to == null) return
         if (directoriesAreSame(from, to)) return
 
         if (!to.isDirectory || !to.canWrite()) {
@@ -416,20 +421,92 @@ object FileUtils {
         return uniqueName
     }
 
-    fun directoriesAreSame(dir1: DocumentFile, dir2: DocumentFile): Boolean {
-        return dir1.uri == dir2.uri || (dir1.name == dir2.name && dir1.length() == dir2.length() && dir1.lastModified() == dir2.lastModified())
+    fun directoriesAreSame(dir1: DocumentFile?, dir2: DocumentFile?): Boolean {
+        // Если обе директории null, они считаются одинаковыми
+        if (dir1 == null && dir2 == null) return true
+
+        // Если только одна из директорий null, они разные
+        if (dir1 == null || dir2 == null) return false
+
+        val uri1 = dir1.uri
+        val uri2 = dir2.uri
+
+        // Преобразуем URI в нормализованный вид
+        val normalizedPath1 = uri1.normalizeUri()
+        val normalizedPath2 = uri2.normalizeUri()
+
+        // Сравниваем URI или свойства файлов
+        return normalizedPath1 == normalizedPath2 ||
+                (dir1.name == dir2.name && dir1.length() == dir2.length() && dir1.lastModified() == dir2.lastModified())
     }
 
-    private fun Uri.openInputStream(context: Context): InputStream? = try {
+    // Расширение для нормализации URI
+    fun Uri.normalizeUri(): String {
+        return when (scheme) {
+            "content" -> path.orEmpty()  // Для content:// используем путь
+            "file" -> toString().removePrefix("file://")  // Убираем префикс file://
+            else -> toString()  // Для других схем используем полное представление
+        }.trimEnd('/')
+    }
+
+    fun Uri.openInputStream(context: Context): InputStream? = try {
         context.contentResolver.openInputStream(this)
     } catch (e: Exception) {
         null
     }
 
-    private fun Uri.openOutputStream(context: Context): OutputStream? = try {
+    fun Uri.openOutputStream(context: Context): OutputStream? = try {
         context.contentResolver.openOutputStream(this)
     } catch (e: Exception) {
         null
+    }
+
+    fun getFileUriFromDirectory(projectFolder: Uri, fileName: String): Uri? {
+        return when (projectFolder.scheme) {
+            "content" -> {
+                projectFolder.buildUpon()
+                .path("document")
+                .appendEncodedPath(Uri.encode(projectFolder.path?.substringAfter("/document/")) +Uri.encode("/$fileName"))
+                .build()
+                //Log.d("checkData","doc ${documentUri.path.toString()}")
+                //Log.d("checkData","doc $documentUri")
+            }
+            "file" -> {
+                val folder = File(projectFolder.path ?: return null)
+                val file = File(folder, fileName)
+                Uri.fromFile(file)
+            }
+            else -> null // Если схема неизвестна, возвращаем null
+        }
+    }
+
+    fun createFile(context: Context, parentUri: Uri, fileName: String, mimeType: String): Uri? {
+        return try {
+            val resolver = context.contentResolver
+
+            val document = findFileInDirectory(getDirectory(context, parentUri), fileName)
+            if (document != null) {
+                Log.d("checkData", "File already exists: ${document.uri}")
+                return document.uri
+            }
+
+            if (parentUri.scheme == "content") {
+                return DocumentsContract.createDocument(resolver, parentUri, mimeType, fileName)
+            }
+
+            if (parentUri.scheme == "file") {
+                val file = File(parentUri.path, fileName)
+                if (file.createNewFile()) {
+                    return Uri.fromFile(file)
+                } else {
+                    throw IOException("Failed to create file: $file")
+                }
+            }
+            null
+        } catch (e: Exception) {
+            Log.e("FileCreation", "Failed to create file: $fileName", e)
+            null
+        }
     }
     //endregion
 }

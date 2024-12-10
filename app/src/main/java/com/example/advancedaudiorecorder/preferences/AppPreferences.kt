@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.net.Uri
 import android.os.Environment
+import android.util.Log
 
 class AppPreferences(private val context: Context) {
     private val sharedPreferences: SharedPreferences =
@@ -16,7 +17,8 @@ class AppPreferences(private val context: Context) {
     var lastOpenedProjectFolder: Uri?
         get() {
             val uriString = sharedPreferences.getString("lastOpenedProjectFolder", null)
-            return uriString?.let { Uri.parse(it) } // Возвращаем Uri только если строка не null
+            return uriString?.let { Log.d("checkData",Uri.parse(it).toString())
+                Uri.parse(it) } // Возвращаем Uri только если строка не null
         }
         set(value) {
             sharedPreferences.edit().putString("lastOpenedProjectFolder", value?.toString()).apply()

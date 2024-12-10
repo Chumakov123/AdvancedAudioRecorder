@@ -30,7 +30,11 @@ import androidx.compose.ui.unit.dp
 import com.example.advancedaudiorecorder.R
 
 @Composable
-fun TopBar(onExitConfirmed: () -> Unit, bpm: Int, onChangeTempo: (Int) -> Unit) {
+fun TopBar(
+    onExitConfirmed: () -> Unit,
+    bpm: Int,
+    onChangeTempo: (Int) -> Unit,
+) {
     var showExitDialog by remember { mutableStateOf(false) } // Управление видимостью диалога
     Box(
         modifier = Modifier

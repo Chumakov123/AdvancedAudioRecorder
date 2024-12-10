@@ -7,19 +7,20 @@ import android.content.pm.PackageManager
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
-import android.os.Environment
+import android.net.Uri
+import android.util.Log
 import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.example.advancedaudiorecorder.presentation.main.MainActivity
 import com.example.advancedaudiorecorder.utils.FileUtils
+import com.example.advancedaudiorecorder.utils.FileUtils.openInputStream
+import com.example.advancedaudiorecorder.utils.FileUtils.openOutputStream
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import java.io.File
-import java.io.FileOutputStream
 
 class AudioRecorder (private val context: Context) {
     private val sampleRate = 44100
@@ -33,19 +34,25 @@ class AudioRecorder (private val context: Context) {
     private val _isRecording = MutableStateFlow(false)
     val isRecording: StateFlow<Boolean> = _isRecording
 
-    fun startRecording(trackId: Int): Boolean {
-        // Проверка разрешения RECORD_AUDIO
+    private lateinit var audioFileUri : Uri
+    private lateinit var projectFolder: Uri
+
+    fun startRecording(trackId: Int, uri: Uri): Boolean {
         if (!checkPermission()) return false
 
         selectedTrack = trackId
 
-        // Создаем файл для записи
-        val audioFile =
-            File(context.getExternalFilesDir(Environment.DIRECTORY_MUSIC), "recorded_audio${selectedTrack}.pcm")
-        if (audioFile.exists()) {
-            audioFile.delete()
+        // Создаем PCM файл
+        val audioFileName = "track_${selectedTrack}.pcm"
+        projectFolder = uri
+        Log.d("checkData","create pcm")
+        audioFileUri = FileUtils.createFile(context, projectFolder, audioFileName, "audio/pcm")!!
+
+        val outputStream = audioFileUri.openOutputStream(context)
+        if (outputStream == null) {
+            Log.d("startRecording", "PCM output stream is null")
+            return false
         }
-        audioFile.createNewFile()
 
         audioRecord = AudioRecord(
             MediaRecorder.AudioSource.MIC,
@@ -59,30 +66,52 @@ class AudioRecorder (private val context: Context) {
 
         // Запись в файл
         CoroutineScope(Dispatchers.IO).launch {
-            FileOutputStream(audioFile).use { outputStream ->
+            outputStream.use { stream ->
                 val audioData = ByteArray(bufferSize)
                 while (_isRecording.value && audioRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
                     val readBytes = audioRecord.read(audioData, 0, bufferSize)
                     if (readBytes > 0) {
-                        outputStream.write(audioData, 0, readBytes)
+                        stream.write(audioData, 0, readBytes)
                     }
                 }
             }
         }
         return true
     }
+
     fun stopRecording() {
         _isRecording.value = false
         audioRecord.stop()
         audioRecord.release()
         Toast.makeText(context, "Запись завершена", Toast.LENGTH_SHORT).show()
 
-        // Используем временный файл записи, созданный ранее
-        val pcmFile = File(context.getExternalFilesDir(Environment.DIRECTORY_MUSIC), "recorded_audio${selectedTrack}.pcm")
-        val wavFile = File(context.getExternalFilesDir(Environment.DIRECTORY_MUSIC), "recorded_audio${selectedTrack}.wav")
+        // Создаем WAV файл
+        val wavFileName = "track_${selectedTrack}.wav"
+        val wavFileName2 = "track_${selectedTrack}"
 
-        FileUtils.convertPcmToWav(pcmFile, wavFile, sampleRate)
-        //LogUtils.printPcmDataAsShorts(pcmFile) // Печать PCM для отладки
+        Log.d("checkData","create wav")
+        val wavFileUri = FileUtils.createFile(context, projectFolder, wavFileName, "audio/wav")
+        if (wavFileUri == null) {
+            Toast.makeText(context, "Не удалось создать WAV файл", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val pcmInputStream = audioFileUri.openInputStream(context)
+        val wavOutputStream = wavFileUri.openOutputStream(context)
+
+        if (pcmInputStream == null || wavOutputStream == null) {
+            Toast.makeText(context, "Ошибка при доступе к потокам", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        try {
+            FileUtils.convertPcmToWav(pcmInputStream, wavOutputStream, sampleRate)
+        } catch (e: Exception) {
+            Log.e("stopRecording", "Ошибка при конвертации PCM в WAV", e)
+        } finally {
+            pcmInputStream.close()
+            wavOutputStream.close()
+        }
     }
 
     fun checkPermission() : Boolean {

@@ -1,8 +1,10 @@
 package com.example.advancedaudiorecorder.utils
 
 import android.content.Context
+import android.net.Uri
 import android.util.Log
 import android.widget.Toast
+import androidx.documentfile.provider.DocumentFile
 import java.io.File
 
 object LogUtils {
@@ -32,6 +34,22 @@ object LogUtils {
         } else {
             Log.e("PCMData", "PCM файл не найден")
         }
+    }
+
+    fun printUriInfo(uri: Uri, context: Context? = null) {
+        Log.d("checkFiles", "uri: $uri")
+        Log.d("checkFiles", "uri path: ${uri.path}")
+
+        if (context == null) return
+
+        val documentFile = DocumentFile.fromSingleUri(context, uri)
+        Log.d("checkFiles","exists: " + documentFile?.exists().toString())
+        Log.d("checkFiles","ifFile: " + documentFile?.isFile.toString())
+        Log.d("checkFiles","isDirectory: " + documentFile?.isDirectory.toString())
+        Log.d("checkFiles","name: " + documentFile?.name.toString())
+        Log.d("checkFiles","type: " + documentFile?.type.toString())
+        Log.d("checkFiles","parent exists: " + documentFile?.parentFile?.exists().toString())
+        Log.d("checkFiles","parent: " + documentFile?.parentFile?.uri?.path.toString())
     }
 
     fun showError(context: Context, message: String, exception: Exception) {

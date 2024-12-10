@@ -21,16 +21,17 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
-import androidx.lifecycle.lifecycleScope
-import com.example.advancedaudiorecorder.service.AudioService
-import com.example.advancedaudiorecorder.ui.theme.AdvancedAudioRecorderTheme
-import kotlinx.coroutines.launch
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.example.advancedaudiorecorder.presentation.screens.MainScreen
+import com.example.advancedaudiorecorder.service.AudioService
+import com.example.advancedaudiorecorder.ui.theme.AdvancedAudioRecorderTheme
+import com.example.advancedaudiorecorder.utils.LogUtils
 import com.example.advancedaudiorecorder.utils.UiUtils
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private lateinit var permissionLauncher: ActivityResultLauncher<String>
@@ -44,6 +45,15 @@ class MainActivity : ComponentActivity() {
             contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
             Log.d("checkData", uri.path.toString())
             mainViewModel.setProjectsDirectory(this, uri, true)
+        }
+    }
+
+    private val fileRequest = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let {
+            contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            LogUtils.printUriInfo(uri)
+            // Выполните действие с выбранным файлом
+            //mainViewModel.setSelectedFile(this, uri)
         }
     }
 
@@ -148,6 +158,7 @@ class MainActivity : ComponentActivity() {
                         onSetBpm = { newBpm -> mainViewModel.setBpm(newBpm) },
                         metronomeVolume = mainViewModel.metronomeVolume.collectAsState().value,
                         onVolumeChange = { newVolume -> mainViewModel.setMetronomeVolume(newVolume) },
+                        //onFolderPick = {fileRequest.launch(arrayOf("audio/*"))},
                         onFolderPick = {dirRequest.launch(null)},
                         projectsDirectory = mainViewModel.projectsDirectory.collectAsState().value
                     )

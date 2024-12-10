@@ -34,7 +34,7 @@ class ProjectManager(
         }
     }
     fun saveProject(uri: Uri, project: ProjectData) {
-        val projectFolder = FileUtils.getDirectoryFromUri(context, uri)
+        val projectFolder = FileUtils.getDirectory(context, uri)
         if (projectFolder != null) {
             saveProject(projectFolder, project)
         }
@@ -50,10 +50,11 @@ class ProjectManager(
 
     fun loadProject(uri: Uri) : ProjectData? {
         try {
-            val projectFolder = FileUtils.getDirectoryFromUri(context, uri)
+            val projectFolder = FileUtils.getDirectory(context, uri)
                 ?: throw IllegalStateException("Не удалось получить директорию проекта")
 
-            val jsonFile = FileUtils.searchFile(context, projectFolder, "$projectFileName.json")
+            //val jsonFile = FileUtils.searchFile(projectFolder, "$projectFileName.json")
+            val jsonFile = FileUtils.findFileInDirectory(projectFolder, "$projectFileName.json")
                 ?: throw IllegalStateException("JSON-файл проекта не найден")
 
             val project = FileUtils.readJson<ProjectData>(context, jsonFile)

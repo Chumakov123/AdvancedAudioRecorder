@@ -55,15 +55,19 @@ fun MainScreen(
     var isSettingsDialogOpen by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        TopBar(onExitConfirmed, bpm, onChangeTempo = { newTempo ->
-            onSetBpm(newTempo)
-            showPopup = true
-            popupJob?.cancel()
-            popupJob = coroutineScope.launch {
-                delay(800)
-                showPopup = false
+        TopBar(
+            onExitConfirmed,
+            bpm,
+            onChangeTempo = { newTempo ->
+                onSetBpm(newTempo)
+                showPopup = true
+                popupJob?.cancel()
+                popupJob = coroutineScope.launch {
+                    delay(800)
+                    showPopup = false
+                }
             }
-        })
+        )
         Box(modifier = Modifier.weight(1f)) {
             Playlist(audioEngine)
         }

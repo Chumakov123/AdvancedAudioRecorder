@@ -55,15 +55,26 @@ class AudioEngine (
     val currentProjectName: StateFlow<String?> = _currentProjectName
 
     private val projectManager = ProjectManager(context)
+
+    private var trackNumber: Int = 0;
     //endregion
 
     init {
+        if (FileUtils.getDirectory(context, _currentProjectFolder.value) == null) {
+            Log.d("checkData", "project not find ${_currentProjectFolder.value?.path}")
+            _currentProjectFolder.value = null
+        }
+
+
         if (_currentProjectFolder.value != null) {
+            val projectFolder : Uri = _currentProjectFolder.value!!
+            Log.d("checkData", _currentProjectFolder.value?.path.toString())
             val projectData = projectManager.loadProject(_currentProjectFolder.value!!)
             projectData?.let {
-                loadProjectData(projectData)
+                loadProjectData(projectData, projectFolder)
                 Toast.makeText(context, "Проект ${getProjectName()} загружен", Toast.LENGTH_SHORT).show()
             }
+            //TODO Если проекта в этой директории больше нет, то создавать новый проект
         }
         else {
             initializeDefaultProject()
@@ -74,6 +85,9 @@ class AudioEngine (
                 _currentProjectFolder.value = projectFolder.uri
 
                 projectManager.saveProject(projectFolder, getProjectData())
+                _currentProjectFolder.value?.let {
+                    tracks.forEach { track->track.setWavUri(it)}
+                }
                 Toast.makeText(context, "Проект ${getProjectName()} создан", Toast.LENGTH_SHORT).show()
             }
 
@@ -82,17 +96,17 @@ class AudioEngine (
     }
 
     fun changeProjectsDirectory(context: Context, uri: Uri, moveFromOldDirectory: Boolean = false) {
-        val newDirectory = FileUtils.getDirectoryFromUri(context, uri) ?: throw IllegalArgumentException("Invalid URI")
-        val oldDirectory = _projectsDirectory.value.let { FileUtils.getDirectoryFromUri(context, it) }
+        val newDirectory = FileUtils.getDirectory(context, uri) ?: throw IllegalArgumentException("Invalid URI")
+        val oldDirectory = _projectsDirectory.value.let { FileUtils.getDirectory(context, it) }
 
-        if (!moveFromOldDirectory || oldDirectory == null || oldDirectory.uri == newDirectory.uri) {
+        if (!moveFromOldDirectory || FileUtils.directoriesAreSame(oldDirectory, newDirectory)) {
             _projectsDirectory.value = uri
             return
         }
 
         _currentProjectFolder.value?.let {
             if ( FileUtils.isSubDirectory(parentUri = _projectsDirectory.value, childUri = it) ) {
-                _currentProjectFolder.value = FileUtils.getDirectoryFromUri(context, it)
+                _currentProjectFolder.value = FileUtils.getDirectory(context, it)
                     ?.let { it1 -> FileUtils.moveFile(context, it1, newDirectory).uri }
             }
         }
@@ -102,7 +116,8 @@ class AudioEngine (
 
     //region Tracks
     fun addTrack() {
-        val track = Track(tracks.count(), context, ::onPlaybackComplete, ::onPlaybackReady)
+        //val projectFolder = _currentProjectFolder.value ?: return
+        val track = Track(trackNumber++, context, ::onPlaybackComplete, ::onPlaybackReady)
         tracks.add(track)
     }
 
@@ -142,10 +157,12 @@ class AudioEngine (
                 metronome.start()
         }
         else if (mode == Mode.PREPARE_RECORD) {
-            Log.d("checkData", "${allReady(true)}")
-            if (allReady(true)) {
+            Log.d("checkData", "allReady ${allReady(true)}")
+            if (allReady(true) && _currentProjectFolder.value != null) {
                 mode = Mode.RECORD
-                audioRecorder.startRecording(_selectedTrackIndex.value)
+                audioRecorder.startRecording(tracks[_selectedTrackIndex.value].id,
+                    _currentProjectFolder.value!!
+                )
                 tracks.forEach {
                     if (it.id != _selectedTrackIndex.value)
                         it.startPlaybackIfEnabled()
@@ -224,9 +241,12 @@ class AudioEngine (
     }
 
     private fun initializeDefaultProject() {
+        Log.d("checkData", "initializeDefaultProject")
+        trackNumber = 0
         repeat(2) { addTrack() }
         _isMetronomeEnabled.value = true
         metronome.setBpm(120)
+        Log.d("checkData", "tracks count ${tracks.count()}")
     }
 
     //region ProjectData
@@ -251,7 +271,7 @@ class AudioEngine (
             selectedTrackIndex = _selectedTrackIndex.value
         )
     }
-     private fun loadProjectData(project: ProjectData) {
+     private fun loadProjectData(project: ProjectData, projectFolder : Uri) {
         _currentProjectName.value = project.name
         _isMetronomeEnabled.value = project.isMetronomeEnabled
 
@@ -271,15 +291,19 @@ class AudioEngine (
                 id = trackData.id,
                 context = context,
                 onPlaybackComplete = ::onPlaybackComplete,
-                onPlaybackReady = ::onPlaybackReady
+                onPlaybackReady = ::onPlaybackReady,
             ).apply {
                 isEnabled = trackData.isEnabled
                 isLooping = trackData.isLooping
                 volume = trackData.volume
                 pitch = trackData.pitch
                 speed = trackData.speed
+                _currentProjectFolder.value?.let { setWavUri(it) }
             }
         })
+         trackNumber = 0
+         if (tracks.isNotEmpty())
+            trackNumber = tracks.maxOf { it.id + 1}
          _selectedTrackIndex.value = project.selectedTrackIndex
     }
     //endregion
